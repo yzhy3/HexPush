@@ -19,6 +19,7 @@ function show(name,on){
 function goHome(){
   if(ONLINE&&ONLINE.status!=="idle")onlineLeave();
   FX_NET=false;
+  if(typeof killKeyboard==="function")killKeyboard();
   mode="menu"; show(); show("home",true); padVisible(false); setCenter(""); resetInput();
   G.conf.length=0; G.tut=null; G.slow=1; G.hitstop=0; G.focus=null;
   tutSay(""); tutHi(null); jbase.classList.remove("pulse");
@@ -120,7 +121,7 @@ document.addEventListener("click",e=>{
   audioInit(); SFX.click();
   b.blur();
   const g=b.dataset.go;
-  if(g==="play"||g==="start"){show();startMatch("match");}
+  if(g==="play"||g==="start"){if(typeof killKeyboard==="function")killKeyboard();show();startMatch("match");}
   else if(g==="replay"){
     if(G.kind==="online"){show();show("online",true);onlineUIRefresh();return;}
     show();startMatch("match");
@@ -181,6 +182,9 @@ const nameInp=el("onlineName");
 if(nameInp){
   nameInp.value=RANK.name;
   nameInp.addEventListener("change",()=>setPlayerName(nameInp.value));
+  nameInp.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){ e.preventDefault(); nameInp.blur(); if(typeof killKeyboard==="function")killKeyboard(); }
+  });
 }
 
 // animated title letters
@@ -229,3 +233,20 @@ document.querySelectorAll("[data-lang]").forEach(b=>{
 
 // Apply translations once DOM + modules ready
 if(typeof applyI18n==="function") applyI18n();
+
+
+function updatePingHud(ms){
+  const box=el("pingHud"), val=el("pingVal");
+  if(!box||!val)return;
+  if(ms==null || G.kind!=="online"){
+    box.hidden=true;
+    return;
+  }
+  box.hidden=false;
+  val.textContent=ms+" ms";
+  box.classList.remove("ping-good","ping-ok","ping-bad","ping-worse");
+  if(ms<80) box.classList.add("ping-good");
+  else if(ms<150) box.classList.add("ping-ok");
+  else if(ms<250) box.classList.add("ping-bad");
+  else box.classList.add("ping-worse");
+}

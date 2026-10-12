@@ -3,6 +3,7 @@
    kind is "match" (real duel), "tutorial", "practice" or "online". */
 
 function startMatch(kind){
+  if(typeof killKeyboard==="function")killKeyboard();
   G.kind=kind||"match";
   const teach=G.kind!=="match"&&G.kind!=="online";
   G.theme=THEMES[CFG.theme]; G.radius=teach?3:SIZES[CFG.size]; G.sp=teach?1:SPEEDS[CFG.speed];
@@ -103,8 +104,15 @@ function update(dt){
       onlineSendInput();
       predictLocalPlayer(dt);
       if(typeof interpOpponent==="function") interpOpponent(dt);
-      // Tiles: only bob/visual — warn & collapse come from host snapshots
-      G.tiles.forEach(tile=>{ tile.bob+=dt; if(!tile.alive&&tile.col<3)tile.col+=dt; });
+      // Animate purple warn locally; only host can kill tiles (via snapshot)
+      G.tiles.forEach(tile=>{
+        tile.bob+=dt;
+        if(tile.alive&&tile.warn>0){
+          tile.warn-=dt/(tile.warnMax||1.7);
+          if(tile.warn<0.02) tile.warn=0.02; // keep visible until host marks dead
+        }
+        if(!tile.alive&&tile.col<3)tile.col+=dt;
+      });
     }
   }else{
     if(G.tut)tutBot(dt);

@@ -55,7 +55,7 @@
     <div class="grp">
       <label id="labUsername">Username</label>
       <div class="row" style="gap:8px">
-        <input class="inp" id="onlineName" maxlength="16" placeholder="Choose username" autocomplete="off" style="flex:1">
+        <input class="inp" id="onlineName" maxlength="16" placeholder="Choose username" autocomplete="off" enterkeyhint="done" inputmode="text" style="flex:1">
         <button class="btn sm" data-go="claimName" type="button">Save</button>
       </div>
       <p class="sub" id="nameStatus" style="margin-top:6px;font-size:11px;text-align:left"></p>
@@ -151,15 +151,16 @@
     <div class="cd"><b>Dash</b><i id="cdDash"></i></div>
     <div class="cd"><b>Guard</b><i id="cdGrd"></i></div>
   </div>
+  <div id="pingHud" class="ping-hud" hidden><span id="pingVal">-- ms</span></div>
   <button id="pause">❚❚</button>
 </div>
 
 <!-- MOBILE PAD -->
 <div id="pad">
   <div id="stick"><div id="jbase"></div><div id="jknob"></div></div>
-  <div class="tbtn" id="bAtk">PUSH</div>
-  <div class="tbtn" id="bDash">DASH</div>
-  <div class="tbtn" id="bGrd">GUARD</div>
+  <div class="tbtn" id="bAtk" role="button" tabindex="-1">PUSH</div>
+  <div class="tbtn" id="bDash" role="button" tabindex="-1">DASH</div>
+  <div class="tbtn" id="bGrd" role="button" tabindex="-1">GUARD</div>
 </div>
 
 <div id="center"></div>

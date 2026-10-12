@@ -11,6 +11,16 @@
 const keys={};                                 // code -> held right now
 const edge={atk:false,dash:false};             // one-shot intents, consumed by playerInput
 const TOUCH=matchMedia("(pointer:coarse)").matches||"ontouchstart" in window;
+/** Close mobile keyboard / blur any focused field (stops keyboard on PUSH). */
+function killKeyboard(){
+  const a=document.activeElement;
+  if(a&&a!==document.body&&typeof a.blur==="function") a.blur();
+  // readonly trick: some Android keyboards stay open otherwise
+  document.querySelectorAll("input,textarea").forEach(inp=>{
+    if(inp.dataset.keepFocus==="1") return;
+    inp.blur();
+  });
+}
 let mouseGuard=false,tGuard=false;
 let joy={id:null,ox:0,oy:0,dx:0,dy:0};
 
@@ -81,15 +91,22 @@ addEventListener("resize",joyDraw);
 
 function bindHold(id,down,up){
   const btn=el(id);
-  btn.addEventListener("touchstart",e=>{e.preventDefault();audioInit();btn.classList.add("hold");down();},{passive:false});
+  btn.addEventListener("touchstart",e=>{
+    e.preventDefault(); e.stopPropagation();
+    killKeyboard();
+    audioInit(); btn.classList.add("hold"); down();
+  },{passive:false});
   btn.addEventListener("touchend",e=>{e.preventDefault();btn.classList.remove("hold");up&&up();},{passive:false});
   btn.addEventListener("touchcancel",()=>{btn.classList.remove("hold");up&&up();});
+  // Block mouse focus / synthetic clicks opening keyboard
+  btn.addEventListener("mousedown",e=>{e.preventDefault(); killKeyboard();});
+  btn.addEventListener("click",e=>{e.preventDefault();});
 }
 bindHold("bAtk",()=>{if(mode==="play")edge.atk=true;});
 bindHold("bDash",()=>{if(mode==="play")edge.dash=true;});
 bindHold("bGrd",()=>tGuard=true,()=>tGuard=false);
 
-stickEl.addEventListener("touchstart",e=>{e.preventDefault();audioInit();
+stickEl.addEventListener("touchstart",e=>{e.preventDefault();killKeyboard();audioInit();
   const t=e.changedTouches[0];joy.id=t.identifier;joy.ox=t.clientX;joy.oy=t.clientY;joy.dx=0;joy.dy=0;
   stickEl.classList.add("act");joyDraw();},{passive:false});
 stickEl.addEventListener("touchmove",e=>{e.preventDefault();

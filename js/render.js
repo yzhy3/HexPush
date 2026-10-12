@@ -61,7 +61,8 @@ function render(){
     hexPath(0,15,HS-2.5); ctx.fillStyle=T.side; ctx.fill();
     // top
     hexPath(0,0,HS-2.5);
-    const warn=t.warn>0?1-t.warn:0;
+    // warn field counts down 1→0; intensity 0→1. Boost so online desync still reads.
+    const warn=t.warn>0?Math.max(0.35, 1-t.warn):0;
     if(warn>0){
       const pulse=.35+.65*Math.abs(Math.sin(G.time*13+t.sd));
       ctx.fillStyle=mix(T.top,T.acc,.25+.5*warn*pulse);

@@ -14,6 +14,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   transform:scale(1.04)}
 .scr.on{opacity:1;pointer-events:auto;transform:scale(1)}
 .scr.on.noclick{pointer-events:none}
+/* Hidden menus must not keep focus (mobile keyboard on PUSH) */
+.scr:not(.on) input,.scr:not(.on) textarea,.scr:not(.on) button{visibility:hidden}
+.tbtn,.tbtn *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;outline:none;touch-action:manipulation}
+.tbtn{cursor:pointer;-webkit-tap-highlight-color:transparent}
 
 /* ---------- title ---------- */
 .title{font-size:clamp(48px,12vw,140px);font-weight:900;letter-spacing:.06em;line-height:.95;
@@ -219,3 +223,12 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   letter-spacing:.14em;cursor:pointer;transition:all .18s}
 .lang-btn:hover{color:#fff;border-color:rgba(150,210,255,.5)}
 .lang-btn.sel{background:linear-gradient(180deg,#2f7dff,#1a47b5);border-color:#8ecdff;color:#fff}
+
+/* ping meter */
+.ping-hud{position:absolute;top:14px;left:50%;transform:translateX(-50%);padding:6px 12px;border-radius:10px;
+  background:rgba(6,12,24,.65);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(8px);
+  font-size:12px;font-weight:800;letter-spacing:.08em;pointer-events:none}
+.ping-hud.ping-good{color:#7de0a8;border-color:rgba(125,224,168,.45)}
+.ping-hud.ping-ok{color:#ffd86b;border-color:rgba(255,216,107,.4)}
+.ping-hud.ping-bad{color:#ff9b3d;border-color:rgba(255,155,61,.45)}
+.ping-hud.ping-worse{color:#ff6b7a;border-color:rgba(255,107,122,.5)}

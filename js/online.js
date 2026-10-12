@@ -28,6 +28,7 @@ const ONLINE={
 
 function onlineReset(){
   FX_NET=false; fxReset();
+  onlineStopPing();
   ONLINE.mmAbort=true;
   if(ONLINE.mmTimer){clearTimeout(ONLINE.mmTimer);ONLINE.mmTimer=null;}
   if(ONLINE.autoStartTimer){clearTimeout(ONLINE.autoStartTimer);ONLINE.autoStartTimer=null;}
@@ -124,7 +125,10 @@ function onOnlineMsg(raw){
     }
   }
   else if(m.t==="ping"){onlineSend({t:"pong",n:m.n});}
-  else if(m.t==="pong"){ONLINE.rtt=performance.now()-m.n;}
+  else if(m.t==="pong"){
+    ONLINE.rtt=Math.max(1, Math.round(performance.now()-m.n));
+    if(typeof updatePingHud==="function") updatePingHud(ONLINE.rtt);
+  }
   else if(m.t==="leave"){
     ONLINE.lastError="Opponent left";
     ONLINE.status="error";
@@ -158,6 +162,7 @@ function wireConn(conn){
     }
   });
   conn.on("open",()=>{
+    onlineStartPing();
     if(!ONLINE.isHost){
       onlineSend({t:"hello", name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color});
     }
@@ -504,6 +509,7 @@ function onlineLeave(){
 
 //------------------------------------------------------------ match start / input / state
 function startOnlineMatch(asHost){
+  if(typeof killKeyboard==="function")killKeyboard();
   G.kind="online";
   G.theme=THEMES[CFG.theme];
   G.radius=SIZES[CFG.size];
@@ -554,6 +560,7 @@ function startOnlineMatch(asHost){
   ONLINE.predErr=0;
   FX_NET=ONLINE.isHost; fxReset();
   ONLINE._oppInit=false; ONLINE._oppHas=false; ONLINE._oppTarget=null;
+  if(typeof updatePingHud==="function") updatePingHud(ONLINE.rtt||0);
   padVisible(TOUCH);
   onlineUIRefresh();
 }
@@ -643,7 +650,7 @@ function onlineBroadcastState(){
   const warn=[];
   G.tiles.forEach((tile,k)=>{
     if(!tile.alive) dead.push(k);
-    else if(tile.warn>0) warn.push([k, +tile.warn.toFixed(3), +tile.warnMax.toFixed(3)]);
+    else if(tile.warn>0) warn.push([String(k), +Math.min(0.92,tile.warn).toFixed(3), +(tile.warnMax||1.7).toFixed(3)]);
   });
   onlineSend({
     t:"s",
@@ -691,17 +698,19 @@ function applyOnlineSnap(m){
       else if(!tile.alive&&shouldLive){tile.alive=true;tile.col=0;tile.warn=0;}
     });
   }
-  // Purple warn flash before tiles fall — host-authored
-  if(m.w && m.w.length){
+  // Purple warn before collapse — host list is source of truth
+  if(m.w){
     const map={};
-    m.w.forEach(e=>{ map[e[0]]=e; });
+    m.w.forEach(e=>{ if(e&&e[0]!=null) map[String(e[0])]=e; });
     G.tiles.forEach((tile,k)=>{
       if(!tile.alive) return;
-      if(map[k]){
-        tile.warn=map[k][1];
-        tile.warnMax=map[k][2]||1.7;
-      }else if(tile.warn>0){
-        // host cleared warn without killing — rare
+      const e=map[String(k)];
+      if(e){
+        // Use host remaining time; never leave at 1.0 (invisible in renderer)
+        const w=Math.min(0.92, Math.max(0.05, +e[1]));
+        tile.warn=w;
+        tile.warnMax=+e[2]||1.7;
+      }else{
         tile.warn=0;
       }
     });
@@ -838,6 +847,22 @@ function onlineToast(msg){
   t.classList.add("show");
   clearTimeout(t._tm);
   t._tm=setTimeout(()=>t.classList.remove("show"),2600);
+}
+
+
+function onlineStartPing(){
+  if(ONLINE._pingTimer) clearInterval(ONLINE._pingTimer);
+  ONLINE.rtt=ONLINE.rtt||0;
+  ONLINE._pingTimer=setInterval(()=>{
+    if(!ONLINE.conn||!ONLINE.conn.open) return;
+    onlineSend({t:"ping", n:performance.now()});
+  }, 1000);
+  // first probe ASAP
+  setTimeout(()=>{ if(ONLINE.conn&&ONLINE.conn.open) onlineSend({t:"ping", n:performance.now()}); }, 200);
+}
+function onlineStopPing(){
+  if(ONLINE._pingTimer){ clearInterval(ONLINE._pingTimer); ONLINE._pingTimer=null; }
+  if(typeof updatePingHud==="function") updatePingHud(null);
 }
 
 function onlineUIRefresh(){
