@@ -1,6 +1,5 @@
 "use strict";
-/* Local ELO + rank tiers. Persisted in localStorage. Used for offline display
-   and as the rank exchanged when connecting online. */
+/* Local ELO + rank tiers. Persisted in localStorage and optionally Firebase. */
 
 const RANK_TIERS=[
   {name:"Iron",        min:0,    color:"#8a9099", icon:"⚔"},
@@ -13,7 +12,7 @@ const RANK_TIERS=[
   {name:"Grandmaster", min:2000, color:"#ff3b3b", icon:"👑"}
 ];
 
-const RANK_DEFAULT={name:"Challenger",elo:1000,wins:0,losses:0,streak:0,bestElo:1000};
+const RANK_DEFAULT={name:"Challenger",elo:1000,wins:0,losses:0,streak:0,bestElo:1000,brWins:0};
 
 function loadRank(){
   try{
@@ -22,7 +21,7 @@ function loadRank(){
   }catch(e){}
   return Object.assign({},RANK_DEFAULT);
 }
-function saveRank(r){localStorage.setItem("hexpush_rank",JSON.stringify(r));}
+function saveRank(r){localStorage.setItem("hexpush_rank",JSON.stringify(r||RANK));}
 
 let RANK=loadRank();
 
@@ -41,7 +40,6 @@ function rankProgress(elo){
   return{pct:Math.min(1,(elo-t.min)/span),cur:elo,next:next.min,tier:t,nextTier:next};
 }
 
-// Standard ELO expected score and update. K=32 for active ranks, lower near top.
 function eloExpected(a,b){return 1/(1+Math.pow(10,(b-a)/400));}
 function eloK(elo){return elo>=1800?16:elo>=1400?24:32;}
 
@@ -56,7 +54,17 @@ function applyMatchResult(win,opponentElo){
   else{RANK.losses++;RANK.streak=Math.min(0,RANK.streak)-1;}
   if(RANK.elo>RANK.bestElo)RANK.bestElo=RANK.elo;
   saveRank(RANK);
+  if(typeof fbSaveProfile==="function") fbSaveProfile();
   return{delta,elo:RANK.elo,tier:rankOf(RANK.elo)};
+}
+
+function applyBrResult(won){
+  if(won){RANK.brWins=(RANK.brWins||0)+1; RANK.wins++; RANK.elo=Math.min(3000,RANK.elo+18);}
+  else{RANK.losses++; RANK.elo=Math.max(0,RANK.elo-8);}
+  if(RANK.elo>RANK.bestElo)RANK.bestElo=RANK.elo;
+  saveRank(RANK);
+  if(typeof fbSaveProfile==="function") fbSaveProfile();
+  return{elo:RANK.elo,tier:rankOf(RANK.elo),brWins:RANK.brWins};
 }
 
 function setPlayerName(n){

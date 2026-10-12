@@ -129,6 +129,7 @@ function tryHit(f,o){
     burst(mx,my,26,"#ffffff",260,.38,2.8); burst(mx,my,14,"#ffe9a8",180,.5,2.2);
     ring(mx,my,"#bfe9ff"); ring(o.x,o.y,"#ffffff");
     G.shake=Math.min(11,G.shake+7); G.flash=.1; G.hitstop=.06; SFX.block();
+    if(typeof fxPush==="function"&&FX_NET){fxPush({t:"shake",v:7});fxPush({t:"flash",v:.1});}
     // recoil goes to the impulse channel — it must never fight the attacker's own input
     f.ix-=Math.cos(f.face)*280; f.iy-=Math.sin(f.face)*280;
     if(G.tut&&o===G.p)G.tut.blocked=true;
@@ -150,6 +151,7 @@ function pushBack(o,a,f){
   burst(mx,my,34,o.color,360,.5,3.8); burst(mx,my,16,"#ffffff",220,.3,2.6);
   ring(mx,my,o.color); ring(mx,my,"#ffffff");
   G.shake=Math.min(20,G.shake+12); G.flash=.3; G.hitstop=.1; SFX.hit();
+  if(typeof fxPush==="function"&&FX_NET){fxPush({t:"shake",v:12});fxPush({t:"flash",v:.3});}
 }
 
 function checkFall(f){
@@ -157,6 +159,7 @@ function checkFall(f){
   const h=fHex(f);
   if(!alive(h.q,h.r)){
     f.dead=true; f.fall=0; SFX.fall(); G.shake=Math.min(12,G.shake+5);
+    if(typeof fxPush==="function"&&FX_NET)fxPush({t:"shake",v:5});
     burst(f.x,f.y,20,f.color,150,.6,3);
     // the money shot: slow time, zoom, ride the fall down
     if(G.kind==="match"){G.hitstop=.09; G.slow=.26; G.focus=f;}

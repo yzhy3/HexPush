@@ -47,3 +47,16 @@ const SFX={
  lose: ()=>{[392,330,262,196].forEach((f,i)=>tone(f,.45,"sine",.2,null,i*.13))},
  cheer:()=>{for(let i=0;i<9;i++)noise(.5+Math.random()*.4,700+Math.random()*1600,.05,Math.random()*.5,.6)}
 };
+
+// When online host runs combat, mirror important SFX to clients via FX_QUEUE.
+(function wrapSfxForNet(){
+  const keys=["dash","swing","hit","block","crack","fall","win","lose","cheer","go","count"];
+  keys.forEach(k=>{
+    if(typeof SFX[k]!=="function")return;
+    const orig=SFX[k];
+    SFX[k]=function(){
+      orig.apply(this,arguments);
+      if(typeof fxPush==="function"&&FX_NET)fxPush({t:"sfx",name:k});
+    };
+  });
+})();

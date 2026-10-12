@@ -18,9 +18,10 @@
   <div class="hook">One Arena. One Opponent. One Wrong Move.</div>
   <div id="homeRank" class="home-rank"></div>
   <div class="col">
-    <button class="btn pri" data-go="online">Online</button>
+    <button class="btn pri" data-go="online">Online 1v1</button>
+    <button class="btn" data-go="br">Battle Royale</button>
     <button class="btn" data-go="play">Play vs AI</button>
-    <button class="btn" data-go="rank">Ranks</button>
+    <button class="btn" data-go="rank">Ranks / Leaderboard</button>
     <button class="btn" data-go="settings">Settings</button>
     <div class="row">
       <button class="link" data-go="how">How To Play</button>
@@ -45,12 +46,16 @@
 <!-- ONLINE LOBBY -->
 <div class="scr" id="scrOnline">
   <div class="panel" style="width:min(440px,94vw)">
-    <h2>Online Duel</h2>
-    <p class="sub">Peer-to-peer match. Share the room code with a friend.</p>
+    <h2>Online 1v1</h2>
+    <p class="sub">Ranked duel. Find a match or play a friend with a code.</p>
 
     <div class="grp">
-      <label>Your name</label>
-      <input class="inp" id="onlineName" maxlength="16" placeholder="Challenger" autocomplete="off">
+      <label>Username</label>
+      <div class="row" style="gap:8px">
+        <input class="inp" id="onlineName" maxlength="16" placeholder="Choose username" autocomplete="off" style="flex:1">
+        <button class="btn sm" data-go="claimName" type="button">Save</button>
+      </div>
+      <p class="sub" id="nameStatus" style="margin-top:6px;font-size:11px;text-align:left"></p>
     </div>
 
     <div class="online-box">
@@ -68,20 +73,26 @@
       </div>
     </div>
 
-    <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">
-      <button class="btn pri" data-go="onlineCreate" style="flex:1;min-width:140px">Create Room</button>
-      <button class="btn" data-go="onlineJoin" style="flex:1;min-width:140px">Join Room</button>
+    <div class="row" style="margin-top:14px">
+      <button class="btn pri" id="btnFindMatch" data-go="onlineFind" style="flex:1">Find Match</button>
+    </div>
+
+    <div class="online-divider"><span>or private room</span></div>
+
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <button class="btn" data-go="onlineCreate" style="flex:1;min-width:120px">Create Room</button>
+      <button class="btn" data-go="onlineJoin" style="flex:1;min-width:120px">Join Room</button>
     </div>
     <div class="grp" style="margin-top:12px">
       <label>Join code</label>
       <input class="inp" id="joinCode" maxlength="8" placeholder="ABC123" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em;text-align:center;font-weight:700">
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="btn pri" id="btnOnlineStart" data-go="onlineStart" disabled style="flex:1;opacity:.45">Start Match</button>
-      <button class="btn sm" data-go="onlineLeave">Leave</button>
+      <button class="btn sm" id="btnOnlineStart" data-go="onlineStart" disabled style="opacity:.45">Start</button>
+      <button class="btn sm" data-go="onlineLeave">Cancel</button>
       <button class="btn sm" data-go="home">Home</button>
     </div>
-    <p class="sub" style="margin-top:14px;font-size:11px">Host sets arena size / theme / speed in Settings before creating the room.</p>
+    <p class="sub" style="margin-top:14px;font-size:11px">Matches start automatically when both players connect. Ranked ELO updates after the duel.</p>
   </div>
 </div>
 
@@ -92,11 +103,35 @@
     <p class="sub">Climb the ladder in online matches. AI games don't affect rank.</p>
     <div id="rankHero" class="rank-hero"></div>
     <div id="rankBars" class="rank-bars"></div>
+    <div class="grp" style="margin-top:16px"><label>Global Leaderboard</label>
+      <div id="leaderboard" class="leaderboard">Loading…</div>
+    </div>
     <div id="rankTiers" class="rank-tiers"></div>
     <div class="row" style="margin-top:18px">
       <button class="btn pri" data-go="online">Play Online</button>
       <button class="btn sm" data-go="home">Home</button>
     </div>
+  </div>
+</div>
+
+
+<!-- BATTLE ROYALE -->
+<div class="scr" id="scrBr">
+  <div class="panel" style="width:min(440px,94vw)">
+    <h2>Battle Royale</h2>
+    <p class="sub">Last fighter standing. Bigger arena. Everyone is a target.</p>
+    <div class="grp"><label>Players (you + bots)</label>
+      <div class="opts" id="brCountOpts">
+        <div class="opt sel" data-brc="4">4</div>
+        <div class="opt" data-brc="5">5</div>
+        <div class="opt" data-brc="6">6</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn pri" data-go="brStart" style="flex:1">Drop In</button>
+      <button class="btn sm" data-go="home">Home</button>
+    </div>
+    <p class="sub" style="margin-top:12px;font-size:11px">Online BR rooms coming via private codes in Online. Effects are synced for both players in 1v1.</p>
   </div>
 </div>
 
@@ -192,8 +227,13 @@
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/config.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/rank.js"></script>
+<script src="js/firebase-app.js"></script>
 <script src="js/hex.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/state.js"></script>
@@ -205,6 +245,7 @@
 <script src="js/render.js"></script>
 <script src="js/match.js"></script>
 <script src="js/online.js"></script>
+<script src="js/br.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

@@ -59,7 +59,8 @@ function update(dt){
   if(mode==="intro"){
     // host (or offline) advances the clock; online client follows host snapshots
     if(!(G.kind==="online"&&!ONLINE.isHost)) G.introT+=dt;
-    const vsName=G.kind==="online"
+    const vsName=G.kind==="br"?"BATTLE ROYALE"
+      :G.kind==="online"
       ?(ONLINE.remoteName||"OPPONENT").toUpperCase()
       :(PERSONAS[G.persona]?PERSONAS[G.persona].name:"OPPONENT").toUpperCase();
     const st=[[0,"PLAYER VS "+vsName],[1.1,"3"],[1.8,"2"],[2.5,"1"],[3.2,"PUSH!"]];
@@ -78,6 +79,14 @@ function update(dt){
   if(mode!=="play")   {if(mode==="over"){G.endT+=dt;camUpdate(dt,2.2);tilesUpdate(dt);}return;}
 
   G.time+=dt;
+
+  if(G.kind==="br"){
+    brUpdate(dt);
+    camUpdate(dt,2.6);
+    hudUpdate();
+    return;
+  }
+
   playerInput(G.p);
 
   if(G.kind==="online"){
@@ -91,7 +100,9 @@ function update(dt){
       onlineBroadcastState();
       if((G.p.dead&&G.p.fall>1.15)||(G.b.dead&&G.b.fall>1.15))endMatchOnline(!G.p.dead,false);
     }else{
+      // Client: predict local movement immediately, send inputs, wait for host combat state
       onlineSendInput();
+      predictLocalPlayer(dt);
       tilesUpdate(dt);
     }
   }else{

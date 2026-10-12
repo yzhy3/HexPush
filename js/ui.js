@@ -3,7 +3,7 @@
 
 const SCR={
   home:"scrHome",settings:"scrSet",how:"scrHow",pause:"scrPause",end:"scrEnd",
-  welcome:"scrWelcome",online:"scrOnline",rank:"scrRank"
+  welcome:"scrWelcome",online:"scrOnline",rank:"scrRank",br:"scrBr"
 };
 const hudEl=el("hud"), centerEl=el("center");
 const cdDash=el("cdDash"), cdGrd=el("cdGrd"), bDashEl=el("bDash");
@@ -18,6 +18,7 @@ function show(name,on){
 }
 function goHome(){
   if(ONLINE&&ONLINE.status!=="idle")onlineLeave();
+  if(typeof brReset==="function")brReset(); FX_NET=false;
   mode="menu"; show(); show("home",true); padVisible(false); setCenter(""); resetInput();
   G.conf.length=0; G.tut=null; G.slow=1; G.hitstop=0; G.focus=null;
   tutSay(""); tutHi(null); jbase.classList.remove("pulse");
@@ -88,6 +89,7 @@ function refreshHomeRank(){
 function refreshRankScreen(){
   const hero=el("rankHero"), bars=el("rankBars"), tiers=el("rankTiers");
   if(!hero)return;
+  refreshLeaderboard();
   const t=rankOf(RANK.elo);
   const prog=rankProgress(RANK.elo);
   hero.innerHTML=
@@ -140,6 +142,29 @@ document.addEventListener("click",e=>{
     onlineUIRefresh();
   }
   else if(g==="rank"){mode="menu";show();show("rank",true);refreshRankScreen();}
+  else if(g==="claimName"){
+    const ni=el("onlineName"); const st=el("nameStatus");
+    (async()=>{
+      const res = typeof fbClaimUsername==="function"
+        ? await fbClaimUsername(ni.value)
+        : {ok:true, local:true};
+      if(res.ok){
+        setPlayerName(ni.value);
+        if(st) st.textContent = res.local ? "Saved locally (configure Firebase for global usernames)" : "Username saved ✓";
+        refreshHomeRank();
+      }else if(st) st.textContent = res.error||"Failed";
+    })();
+  }
+  else if(g==="br"){mode="menu";show();show("br",true);}
+  else if(g==="brStart"){
+    const sel=document.querySelector("#brCountOpts .opt.sel");
+    const n=sel?+sel.dataset.brc:4;
+    show(); brStartLocal(n);
+  }
+  else if(g==="onlineFind"){
+    const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
+    onlineFindMatch();
+  }
   else if(g==="onlineCreate"){
     const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
     onlineCreate();
@@ -170,3 +195,36 @@ refreshHomeRank();
 
 // first launch ever -> offer the tutorial once (Skip is remembered forever)
 if(!flag("seen")){show();show("welcome",true);}
+
+
+async function refreshLeaderboard(){
+  const box=el("leaderboard"); if(!box)return;
+  box.innerHTML="Loading…";
+  const rows = typeof fbLeaderboard==="function" ? await fbLeaderboard(15) : [];
+  if(!rows.length){
+    box.innerHTML='<div class="lb-row me"><span>#1</span><span>'+RANK.name+'</span><span>'+RANK.elo+'</span></div>';
+    return;
+  }
+  box.innerHTML=rows.map((r,i)=>
+    '<div class="lb-row'+(r.me?" me":"")+'"><span>#'+(i+1)+'</span><span>'+
+    (r.username||"?")+'</span><span>'+r.elo+'</span></div>'
+  ).join("");
+}
+
+// BR count opts
+document.querySelectorAll("#brCountOpts .opt").forEach(o=>{
+  o.onclick=()=>{
+    document.querySelectorAll("#brCountOpts .opt").forEach(x=>x.classList.remove("sel"));
+    o.classList.add("sel"); SFX.click();
+  };
+});
+
+// Boot Firebase
+(async function(){
+  if(typeof fbInit==="function"){
+    const ok=await fbInit();
+    refreshHomeRank();
+    const st=el("nameStatus");
+    if(st&&FB_ENABLED) st.textContent = ok ? "Cloud sync on" : ("Firebase: "+(FB.error||"offline"));
+  }
+})();
