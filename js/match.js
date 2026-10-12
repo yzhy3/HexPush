@@ -99,9 +99,10 @@ function update(dt){
       onlineBroadcastState();
       if((G.p.dead&&G.p.fall>1.15)||(G.b.dead&&G.b.fall>1.15))endMatchOnline(!G.p.dead,false);
     }else{
-      // Client: predict local movement immediately, send inputs, wait for host combat state
+      // Client: instant local sim + send inputs; remote opponent interpolated
       onlineSendInput();
       predictLocalPlayer(dt);
+      if(typeof interpOpponent==="function") interpOpponent(dt);
       tilesUpdate(dt);
     }
   }else{

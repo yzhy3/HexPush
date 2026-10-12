@@ -115,6 +115,12 @@ function stepFighter(f,o,dt){
 //------------------------------------------------------------ combat resolution
 function tryHit(f,o){
   if(o.dead||f.hitDone)return; f.hitDone=true;
+  // Online guest: predict swing only — host owns hit/block/knockback
+  if(G.kind==="online"&&typeof ONLINE!=="undefined"&&!ONLINE.isHost){
+    burst(f.x+Math.cos(f.face)*26,f.y+Math.sin(f.face)*26,5,f.color,110,.22,2.5);
+    SFX.swing();
+    return;
+  }
   const dx=o.x-f.x,dy=o.y-f.y,d=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
   burst(f.x+Math.cos(f.face)*26,f.y+Math.sin(f.face)*26,5,f.color,110,.22,2.5);
   if(d>64||Math.abs(angDiff(a,f.face))>1.0){                       // WHIFF — light, obviously "no contact"

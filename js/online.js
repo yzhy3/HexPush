@@ -101,15 +101,17 @@ function onOnlineMsg(raw){
     onlineUIRefresh();
     if(ONLINE.isHost)scheduleAutoStart();
   }
-  else if(m.t==="input"&&ONLINE.isHost){
+  else if((m.t==="input"||m.t==="i")&&ONLINE.isHost){
     const ri=ONLINE.remoteInput;
-    ri.mx=+m.mx||0; ri.my=+m.my||0;
-    if(m.atk)ri.atk=true;
-    if(m.dash)ri.dash=true;
-    ri.guard=m.guard?1:0;
-    ri.seq=m.seq|0;
+    // compact: x,y,a,d,g,n  legacy: mx,my,atk,dash,guard,seq
+    ri.mx=+(m.x!=null?m.x:m.mx)||0;
+    ri.my=+(m.y!=null?m.y:m.my)||0;
+    if(m.a||m.atk) ri.atk=true;
+    if(m.d||m.dash) ri.dash=true;
+    ri.guard=(m.g!=null?m.g:m.guard)?1:0;
+    ri.seq=(m.n!=null?m.n:m.seq)|0;
   }
-  else if(m.t==="state"&&!ONLINE.isHost){
+  else if((m.t==="state"||m.t==="s")&&!ONLINE.isHost){
     ONLINE.snap=m;
     ONLINE.snapT=performance.now();
     applyOnlineSnap(m);
@@ -550,20 +552,191 @@ function startOnlineMatch(asHost){
   ONLINE.status="playing";
   ONLINE.predErr=0;
   FX_NET=ONLINE.isHost; fxReset();
+  ONLINE._oppInit=false; ONLINE._oppHas=false; ONLINE._oppTarget=null;
   padVisible(TOUCH);
   onlineUIRefresh();
 }
 
+function packFighter(f){
+  // Compact snapshot — fewer digits, only fields needed to render + simulate
+  return [
+    +f.x.toFixed(1), +f.y.toFixed(1),
+    +f.vx.toFixed(1), +f.vy.toFixed(1),
+    +f.ix.toFixed(1), +f.iy.toFixed(1),
+    +f.face.toFixed(2),
+    f.atkPh||"", +f.atk.toFixed(3), +f.atkCd.toFixed(2), f.hitDone?1:0,
+    +f.dash.toFixed(3), +f.dashCd.toFixed(2), +f.dashDX.toFixed(2), +f.dashDY.toFixed(2),
+    f.guard?1:0, +f.gm.toFixed(2), +f.stagger.toFixed(2),
+    +f.kb.toFixed(2), +f.kbX.toFixed(1), +f.kbY.toFixed(1), +f.kbFX.toFixed(1), +f.kbFY.toFixed(1),
+    +f.fall.toFixed(2), f.dead?1:0, +f.squash.toFixed(2)
+  ];
+}
+function unpackFighter(f,a){
+  if(!a)return;
+  if(!Array.isArray(a)){
+    // legacy object format
+    Object.assign(f,a); return;
+  }
+  let i=0;
+  f.x=a[i++]; f.y=a[i++];
+  f.vx=a[i++]; f.vy=a[i++];
+  f.ix=a[i++]; f.iy=a[i++];
+  f.face=a[i++];
+  f.atkPh=a[i++]; f.atk=a[i++]; f.atkCd=a[i++]; f.hitDone=!!a[i++];
+  f.dash=a[i++]; f.dashCd=a[i++]; f.dashDX=a[i++]; f.dashDY=a[i++];
+  f.guard=!!a[i++]; f.gm=a[i++]; f.stagger=a[i++];
+  f.kb=a[i++]; f.kbX=a[i++]; f.kbY=a[i++]; f.kbFX=a[i++]; f.kbFY=a[i++];
+  f.fall=a[i++]; f.dead=!!a[i++]; f.squash=a[i++];
+}
+
+// Soft reconcile local player — keep control responsive, only hard-correct on combat
+function reconcileFighter(f,a){
+  if(!a)return;
+  const tmp={};
+  unpackFighter(tmp,a);
+  const dx=tmp.x-f.x, dy=tmp.y-f.y;
+  const dist=Math.hypot(dx,dy);
+  ONLINE.predErr=dist;
+
+  // Host owns: death, knockback, stagger, guard meter when hit
+  f.dead=tmp.dead; f.fall=tmp.fall;
+  f.kb=tmp.kb; f.kbX=tmp.kbX; f.kbY=tmp.kbY; f.kbFX=tmp.kbFX; f.kbFY=tmp.kbFY;
+  f.stagger=tmp.stagger;
+  f.squash=tmp.squash;
+
+  if(tmp.dead || tmp.kb>0 || tmp.stagger>0.08){
+    // Hard authority during reactions
+    f.x=tmp.x; f.y=tmp.y; f.face=tmp.face;
+    f.vx=tmp.vx; f.vy=tmp.vy; f.ix=tmp.ix; f.iy=tmp.iy;
+    f.atkPh=tmp.atkPh; f.atk=tmp.atk; f.atkCd=tmp.atkCd; f.hitDone=tmp.hitDone;
+    f.dash=tmp.dash; f.dashCd=tmp.dashCd; f.dashDX=tmp.dashDX; f.dashDY=tmp.dashDY;
+    f.guard=tmp.guard; f.gm=tmp.gm;
+  }else{
+    // Movement prediction wins — only soft-correct position
+    f.dashCd=Math.min(f.dashCd, tmp.dashCd); // don't let local dashCd drift longer than host
+    f.atkCd=Math.min(f.atkCd, tmp.atkCd);
+    f.gm=tmp.gm; // meter from host
+    // Keep local attack animation if we're mid-swing and host hasn't caught up
+    if(!(f.atkPh && !tmp.atkPh && f.atk>0)){
+      // if host says we're attacking too, sync phase
+      if(tmp.atkPh){ f.atkPh=tmp.atkPh; f.atk=tmp.atk; f.hitDone=tmp.hitDone; }
+    }
+    if(dist>100){
+      f.x=tmp.x; f.y=tmp.y; f.face=tmp.face;
+      f.vx=tmp.vx; f.vy=tmp.vy;
+    }else if(dist>20){
+      f.x+=dx*0.12; f.y+=dy*0.12;
+    }
+  }
+}
+
+function onlineBroadcastState(){
+  if(!ONLINE.isHost||ONLINE.status!=="playing")return;
+  const now=performance.now();
+  const hasFx=FX_QUEUE.length>0;
+  // ~40 Hz base; immediate when FX pending
+  if(!hasFx && ONLINE._lastBroadcast && now-ONLINE._lastBroadcast<25) return;
+  ONLINE._lastBroadcast=now;
+  const fx=FX_QUEUE.splice(0,FX_QUEUE.length);
+  const dead=[];
+  G.tiles.forEach((t,k)=>{if(!t.alive)dead.push(k);});
+  onlineSend({
+    t:"s", // short type
+    ti:+G.time.toFixed(2),
+    in:+G.introT.toFixed(2),
+    m:mode==="play"?1:(mode==="intro"?0:2),
+    h:packFighter(G.p),
+    g:packFighter(G.b),
+    d:dead,
+    nc:+G.nextCrumble.toFixed(2),
+    sh:+(G.shake||0).toFixed(2),
+    fl:+(G.flash||0).toFixed(2),
+    fx:fx.length?fx:undefined
+  });
+}
+
+function applyOnlineSnap(m){
+  // Support compact "s" and legacy "state"
+  const host=m.h||m.host, guest=m.g||m.guest;
+  const time=m.ti!=null?m.ti:m.time;
+  const introT=m.in!=null?m.in:m.introT;
+  const dead=m.d||m.dead;
+  const nextCrumble=m.nc!=null?m.nc:m.nextCrumble;
+
+  // Remote opponent → interpolate toward host body
+  if(host){
+    if(!ONLINE._oppTarget) ONLINE._oppTarget={};
+    unpackFighter(ONLINE._oppTarget, host);
+    ONLINE._oppHas=true;
+    ONLINE._oppT=performance.now();
+    // If first or huge gap, snap
+    if(!ONLINE._oppInit || Math.hypot((ONLINE._oppTarget.x||0)-G.b.x,(ONLINE._oppTarget.y||0)-G.b.y)>120){
+      unpackFighter(G.b, host);
+      ONLINE._oppInit=true;
+    }
+  }
+  // Local player → soft reconcile guest body
+  if(guest) reconcileFighter(G.p, guest);
+
+  if(dead){
+    G.tiles.forEach((tile,k)=>{
+      const shouldLive=!dead.includes(k);
+      if(tile.alive&&!shouldLive){tile.alive=false;tile.col=.001;}
+      else if(!tile.alive&&shouldLive){tile.alive=true;tile.col=0;tile.warn=0;}
+    });
+  }
+  if(time!=null) G.time=time;
+  if(introT!=null) G.introT=introT;
+  if(nextCrumble!=null) G.nextCrumble=nextCrumble;
+  if(m.sh!=null) G.shake=Math.max(G.shake||0, m.sh);
+  if(m.fl!=null) G.flash=Math.max(G.flash||0, m.fl);
+  if(m.shake!=null) G.shake=Math.max(G.shake||0, m.shake);
+  if(m.flash!=null) G.flash=Math.max(G.flash||0, m.flash);
+  if(m.fx&&m.fx.length) fxPlayMany(m.fx);
+  if(m.m!=null){
+    mode = m.m===1?"play":(m.m===0?"intro":mode);
+  }else if(m.mode&&(m.mode==="play"||m.mode==="intro")) mode=m.mode;
+}
+
+/** Smooth remote fighter toward last network target (call every frame on client). */
+function interpOpponent(dt){
+  if(!ONLINE._oppHas||!ONLINE._oppTarget)return;
+  const o=G.b, tg=ONLINE._oppTarget;
+  // During knockback/death trust target hard
+  if(tg.dead||tg.kb>0){
+    unpackFighter(o, packFighter(tg)); // copy fields via pack/unpack is wasteful
+    o.x=tg.x;o.y=tg.y;o.vx=tg.vx;o.vy=tg.vy;o.ix=tg.ix;o.iy=tg.iy;
+    o.face=tg.face;o.dead=tg.dead;o.fall=tg.fall;o.kb=tg.kb;
+    o.kbX=tg.kbX;o.kbY=tg.kbY;o.kbFX=tg.kbFX;o.kbFY=tg.kbFY;
+    o.atkPh=tg.atkPh;o.atk=tg.atk;o.guard=tg.guard;o.gm=tg.gm;
+    o.stagger=tg.stagger;o.dash=tg.dash;o.dashCd=tg.dashCd;
+    return;
+  }
+  const k=Math.min(1, dt*18); // responsive chase without jitter
+  o.x+=(tg.x-o.x)*k;
+  o.y+=(tg.y-o.y)*k;
+  o.vx=tg.vx; o.vy=tg.vy; o.ix=tg.ix; o.iy=tg.iy;
+  o.face=tg.face;
+  o.atkPh=tg.atkPh; o.atk=tg.atk; o.atkCd=tg.atkCd;
+  o.guard=tg.guard; o.gm=tg.gm; o.stagger=tg.stagger;
+  o.dash=tg.dash; o.dashCd=tg.dashCd; o.dashDX=tg.dashDX; o.dashDY=tg.dashDY;
+  o.squash=tg.squash; o.dead=tg.dead; o.fall=tg.fall;
+}
+
 function onlineSendInput(){
-  if(ONLINE.isHost||!ONLINE.conn||ONLINE.status!=="playing")return;
+  if(ONLINE.isHost||!ONLINE.conn)return;
+  if(ONLINE.status!=="playing"&&ONLINE.status!=="ready")return;
   if(mode!=="play"&&mode!=="intro")return;
   const f=G.p;
+  // Compact input packet
   onlineSend({
-    t:"input",
-    mx:f.ai.mx, my:f.ai.my,
-    atk:!!f.ai.wantAtk, dash:!!f.ai.wantDash,
-    guard:f.ai.wantGuard?1:0,
-    seq:++ONLINE.seq
+    t:"i",
+    x:+(f.ai.mx||0).toFixed(2),
+    y:+(f.ai.my||0).toFixed(2),
+    a:f.ai.wantAtk?1:0,
+    d:f.ai.wantDash?1:0,
+    g:f.ai.wantGuard?1:0,
+    n:++ONLINE.seq
   });
 }
 
@@ -577,93 +750,16 @@ function applyRemoteInputToBot(){
   b.ai.wantGuard=ri.guard;
 }
 
-function packFighter(f){
-  return {
-    x:+f.x.toFixed(1), y:+f.y.toFixed(1),
-    vx:+f.vx.toFixed(1), vy:+f.vy.toFixed(1),
-    ix:+f.ix.toFixed(1), iy:+f.iy.toFixed(1),
-    face:+f.face.toFixed(3),
-    atk:f.atk, atkPh:f.atkPh, atkCd:+f.atkCd.toFixed(2), hitDone:f.hitDone,
-    dash:f.dash, dashCd:+f.dashCd.toFixed(2),
-    dashDX:f.dashDX, dashDY:f.dashDY,
-    guard:f.guard, gm:+f.gm.toFixed(3), stagger:+f.stagger.toFixed(2),
-    kb:+f.kb.toFixed(2), kbX:f.kbX, kbY:f.kbY, kbFX:f.kbFX, kbFY:f.kbFY,
-    fall:+f.fall.toFixed(2), dead:f.dead, squash:+f.squash.toFixed(2)
-  };
-}
-function unpackFighter(f,s){
-  if(!s)return;
-  f.x=s.x;f.y=s.y;f.vx=s.vx;f.vy=s.vy;f.ix=s.ix;f.iy=s.iy;
-  f.face=s.face;
-  f.atk=s.atk;f.atkPh=s.atkPh;f.atkCd=s.atkCd;f.hitDone=s.hitDone;
-  f.dash=s.dash;f.dashCd=s.dashCd;f.dashDX=s.dashDX;f.dashDY=s.dashDY;
-  f.guard=s.guard;f.gm=s.gm;f.stagger=s.stagger;
-  f.kb=s.kb;f.kbX=s.kbX;f.kbY=s.kbY;f.kbFX=s.kbFX;f.kbFY=s.kbFY;
-  f.fall=s.fall;f.dead=s.dead;f.squash=s.squash;
-}
-
-// Soft reconcile: keep local prediction when close, snap when far
-function reconcileFighter(f,s){
-  if(!s)return;
-  const dx=s.x-f.x, dy=s.y-f.y;
-  const dist=Math.hypot(dx,dy);
-  ONLINE.predErr=dist;
-  // combat state always from server
-  f.atk=s.atk;f.atkPh=s.atkPh;f.atkCd=s.atkCd;f.hitDone=s.hitDone;
-  f.dash=s.dash;f.dashCd=s.dashCd;f.dashDX=s.dashDX;f.dashDY=s.dashDY;
-  f.guard=s.guard;f.gm=s.gm;f.stagger=s.stagger;
-  f.kb=s.kb;f.kbX=s.kbX;f.kbY=s.kbY;f.kbFX=s.kbFX;f.kbFY=s.kbFY;
-  f.fall=s.fall;f.dead=s.dead;f.squash=s.squash;
-  f.vx=s.vx;f.vy=s.vy;f.ix=s.ix;f.iy=s.iy;
-  if(s.dead||s.kb>0||dist>48){
-    // hard correct on knockback / death / large error
-    f.x=s.x;f.y=s.y;f.face=s.face;
-  }else if(dist>6){
-    // blend toward server
-    f.x+=dx*0.35; f.y+=dy*0.35;
-    f.face=s.face;
+/** Online client: full local simulation so movement/attack feel instant. */
+function predictLocalPlayer(dt){
+  if(!G.p) return;
+  // If host put us in hitstun/knockback, don't fight it with prediction
+  if(G.p.kb>0){
+    stepFighter(G.p, G.b, dt); // still advance kb tween
+    return;
   }
-  // else trust prediction
-}
-
-function onlineBroadcastState(){
-  if(!ONLINE.isHost||ONLINE.status!=="playing")return;
-  // every frame — small payload, P2P can handle it
-  const dead=[];
-  G.tiles.forEach((t,k)=>{if(!t.alive)dead.push(k);});
-  const fx=FX_QUEUE.splice(0,FX_QUEUE.length);
-  onlineSend({
-    t:"state",
-    time:+G.time.toFixed(3), introT:+G.introT.toFixed(3), mode:mode,
-    host:packFighter(G.p),
-    guest:packFighter(G.b),
-    dead, nextCrumble:+G.nextCrumble.toFixed(2),
-    shake:G.shake, flash:G.flash, hitstop:G.hitstop, slow:G.slow,
-    fx
-  });
-}
-
-function applyOnlineSnap(m){
-  // Opponent (host body) — full authority
-  unpackFighter(G.b, m.host);
-  // Self (guest body) — soft reconcile so movement feels instant
-  reconcileFighter(G.p, m.guest);
-
-  if(m.dead){
-    G.tiles.forEach((t,k)=>{
-      const shouldLive=!m.dead.includes(k);
-      if(t.alive&&!shouldLive){t.alive=false;t.col=.001;}
-      else if(!t.alive&&shouldLive){t.alive=true;t.col=0;t.warn=0;}
-    });
-  }
-  G.time=m.time; G.introT=m.introT;
-  G.nextCrumble=m.nextCrumble;
-  // shake/flash from host (authoritative impact feel)
-  if(typeof m.shake==="number") G.shake=Math.max(G.shake||0, m.shake);
-  if(typeof m.flash==="number") G.flash=Math.max(G.flash||0, m.flash);
-  G.hitstop=m.hitstop; G.slow=m.slow;
-  if(m.fx&&m.fx.length) fxPlayMany(m.fx);
-  if(m.mode&&m.mode!==mode&&(m.mode==="play"||m.mode==="intro"))mode=m.mode;
+  // Full fighter step — same as offline. tryHit is client-safe (visual only).
+  stepFighter(G.p, G.b, dt);
 }
 
 function endMatchOnline(win, fromRemote){
@@ -747,44 +843,3 @@ function onlineHostStart(){
   startOnlineMatch(true);
 }
 
-// Client-side local prediction step (movement + dash only; combat from host)
-function predictLocalPlayer(dt){
-  const f=G.p;
-  if(f.dead){f.fall+=dt;return;}
-  // If host has us in knockback/stagger, prediction already reconciled those fields
-  if(f.kb>0||f.stagger>0)return;
-
-  const sp=G.sp;
-  f.breath+=dt*2.4;
-  f.squash=Math.max(0,f.squash-dt*4);
-  f.atkCd=Math.max(0,f.atkCd-dt*sp);
-  f.dashCd=Math.max(0,f.dashCd-dt*sp);
-
-  // guard meter local feedback
-  const wantG=f.ai.wantGuard&&f.atkPh===""&&f.gm>.12;
-  f.guard=!!wantG;
-  f.gm=Math.max(0,Math.min(1,f.gm+(f.guard?-dt*.52:dt*.42)));
-
-  // dash start (visual)
-  if(f.ai.wantDash&&f.dashCd<=0&&f.atkPh===""){
-    const m=Math.hypot(f.ai.mx,f.ai.my);
-    const dx=m>.1?f.ai.mx/m:Math.cos(f.face), dy=m>.1?f.ai.my/m:Math.sin(f.face);
-    f.dash=.16; f.dashCd=1.35; f.dashDX=dx; f.dashDY=dy;
-    f.ix+=dx*DASHSPD*.55; f.iy+=dy*DASHSPD*.55;
-  }
-
-  // walk
-  let tx=0,ty=0;
-  if(f.dash>0){
-    f.dash-=dt; tx=f.dashDX*DASHSPD; ty=f.dashDY*DASHSPD;
-  }else if(f.atkPh===""){
-    tx=f.ai.mx*SPD; ty=f.ai.my*SPD;
-    if(f.ai.mx||f.ai.my)f.face=Math.atan2(f.ai.my,f.ai.mx);
-  }
-  f.vx+=(tx-f.vx)*Math.min(1,dt*14);
-  f.vy+=(ty-f.vy)*Math.min(1,dt*14);
-  f.ix*=Math.exp(-IMPULSE_DAMP*dt);
-  f.iy*=Math.exp(-IMPULSE_DAMP*dt);
-  f.x+=(f.vx+f.ix)*dt*sp;
-  f.y+=(f.vy+f.iy)*dt*sp;
-}
