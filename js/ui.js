@@ -163,7 +163,12 @@ document.addEventListener("click",e=>{
   }
   else if(g==="onlineFind"){
     const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
-    onlineFindMatch();
+    Promise.resolve(onlineFindMatch()).catch(e=>{
+      console.warn(e);
+      ONLINE.lastError=String(e.message||e);
+      ONLINE.status="error";
+      onlineUIRefresh();
+    });
   }
   else if(g==="onlineLeave"){onlineLeave(); onlineUIRefresh();}
 });

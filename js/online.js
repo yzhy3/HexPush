@@ -31,6 +31,9 @@ function onlineReset(){
   ONLINE.mmAbort=true;
   if(ONLINE.mmTimer){clearTimeout(ONLINE.mmTimer);ONLINE.mmTimer=null;}
   if(ONLINE.autoStartTimer){clearTimeout(ONLINE.autoStartTimer);ONLINE.autoStartTimer=null;}
+  if(ONLINE.mmUnsub){try{ONLINE.mmUnsub();}catch(e){} ONLINE.mmUnsub=null;}
+  if(ONLINE.mmPoll){clearInterval(ONLINE.mmPoll);ONLINE.mmPoll=null;}
+  if(ONLINE.mmUid){ mmCleanupDoc(ONLINE.mmUid); ONLINE.mmUid=null; }
   try{if(ONLINE.conn)ONLINE.conn.close();}catch(e){}
   try{if(ONLINE.peer)ONLINE.peer.destroy();}catch(e){}
   ONLINE.peer=null; ONLINE.conn=null; ONLINE.isHost=false; ONLINE.room="";
@@ -158,154 +161,270 @@ function wireConn(conn){
   });
 }
 
-//------------------------------------------------------------ Quick Match (auto 1v1)
-function mmHostId(bucket,slot){return "hph"+bucket+"s"+slot;}
+//------------------------------------------------------------ Quick Match (Firebase queue + PeerJS P2P)
+/* Flow:
+   1. Open a PeerJS peer (random id)
+   2. Write ourselves into Firestore matchmaking queue
+   3. Look for another "waiting" player
+   4. Pair via transaction: one becomes host, other guest
+   5. Guest connects to host peerId over PeerJS
+*/
 
-function onlineFindMatch(){
+function mmMyUid(){
+  return (FB.user && FB.user.uid) || ("local_"+((RANK.name||"p").replace(/\W/g,"_"))+"_"+Math.random().toString(36).slice(2,8));
+}
+
+async function mmCleanupDoc(uid){
+  if(!FB.ready||!FB.db||!uid)return;
+  try{ await FB.db.collection("matchmaking").doc(uid).delete(); }catch(e){}
+}
+
+async function onlineFindMatch(){
   onlineReset();
   ONLINE.status="searching";
   ONLINE.seed=(Math.random()*1e9)|0;
+  ONLINE.mmAbort=false;
   onlineUIRefresh();
-  onlineToast("Searching for opponent…");
+  onlineToast(typeof t==="function"?t("searchingOpp"):"Searching for opponent…");
 
-  const bucket=Math.floor(Date.now()/12000);
-  // Try current + previous bucket so late joiners still find hosts
-  const buckets=[bucket, bucket-1];
-  let slot=0;
-  const maxSlots=5;
+  // Need Firebase for reliable queue
+  if(!FB.ready){
+    // try init once more
+    if(typeof fbInit==="function"){
+      await fbInit();
+    }
+  }
+  if(!FB.ready){
+    ONLINE.lastError = FB.error || "Firebase offline — enable Anonymous Auth + Firestore";
+    ONLINE.status="error";
+    onlineUIRefresh();
+    onlineToast(ONLINE.lastError);
+    return;
+  }
 
-  // Our peer (random id) used while probing for hosts
-  const peer=new Peer({debug:0,config:ICE});
-  ONLINE.peer=peer;
+  // 1) PeerJS peer with random id
+  const peer = new Peer({debug:1, config:ICE});
+  ONLINE.peer = peer;
 
-  peer.on("error",err=>{
-    // ignore probe noise; real errors surface later
-    if(ONLINE.status==="searching"&&String(err.type||"").includes("network")){
-      ONLINE.lastError="Network error";
+  peer.on("error", err=>{
+    const msg = String(err.type||err.message||err);
+    console.warn("[HexPush] Peer error", msg);
+    if(ONLINE.status==="searching"||ONLINE.status==="connecting"){
+      if(/network|server-error|socket/i.test(msg)){
+        ONLINE.lastError = "PeerJS network error";
+        ONLINE.status="error";
+        onlineUIRefresh();
+      }
+    }
+  });
+
+  peer.on("open", async (id)=>{
+    if(ONLINE.mmAbort)return;
+    ONLINE.myId = id;
+    ONLINE.room = id;
+    console.log("[HexPush] Peer open", id);
+    try{
+      await mmEnterQueue(id);
+    }catch(e){
+      console.warn(e);
+      ONLINE.lastError = String(e.message||e);
       ONLINE.status="error";
       onlineUIRefresh();
     }
   });
 
-  peer.on("open",id=>{
-    ONLINE.myId=id;
-    probeHosts();
-  });
-
-  function probeHosts(){
-    if(ONLINE.mmAbort||ONLINE.status!=="searching")return;
-    if(slot>=maxSlots*buckets.length){
-      // Nobody to join — become a waiting host on a random slot
-      const s=Math.random()*maxSlots|0;
-      becomeMatchHost(buckets[0], s);
-      return;
+  // Host path: someone will connect to us
+  peer.on("connection", conn=>{
+    if(ONLINE.conn){ try{conn.close();}catch(e){} return; }
+    if(!ONLINE.isHost && ONLINE.status!=="searching" && ONLINE.status!=="connecting"){
+      // might still be deciding roles
     }
-    const b=buckets[slot%buckets.length];
-    const s=slot%maxSlots;
-    const hostId=mmHostId(b,s);
-    slot++;
-
-    let settled=false;
-    const conn=peer.connect(hostId,{reliable:true});
-    const timer=setTimeout(()=>{
-      if(settled)return;
-      settled=true;
-      try{conn.close();}catch(e){}
-      probeHosts();
-    },900);
-
-    conn.on("open",()=>{
-      if(settled||ONLINE.mmAbort)return;
-      settled=true;
-      clearTimeout(timer);
-      ONLINE.isHost=false;
-      ONLINE.room=hostId;
-      wireConn(conn);
-      ONLINE.status="connecting";
-      onlineUIRefresh();
-      onlineToast("Opponent found!");
-    });
-    conn.on("error",()=>{
-      if(settled)return;
-      settled=true;
-      clearTimeout(timer);
-      probeHosts();
-    });
-  }
-}
-
-function becomeMatchHost(bucket,slot){
-  if(ONLINE.mmAbort)return;
-  const hostId=mmHostId(bucket,slot);
-
-  try{if(ONLINE.peer)ONLINE.peer.destroy();}catch(e){}
-  ONLINE.conn=null;
-
-  const peer=new Peer(hostId,{debug:0,config:ICE});
-  ONLINE.peer=peer;
-  ONLINE.isHost=true;
-  ONLINE.room=hostId;
-  ONLINE.seed=(Math.random()*1e9)|0;
-
-  peer.on("open",()=>{
-    if(ONLINE.mmAbort)return;
-    ONLINE.status="searching";
-    onlineUIRefresh();
-    // If nobody joins in this bucket window, retry matchmaking
-    ONLINE.mmTimer=setTimeout(()=>{
-      if(ONLINE.status==="searching"&&!ONLINE.conn){
-        onlineFindMatch();
-      }
-    },14000);
-  });
-
-  peer.on("connection",conn=>{
-    if(ONLINE.conn||ONLINE.mmAbort){try{conn.close();}catch(e){}return;}
-    if(ONLINE.mmTimer){clearTimeout(ONLINE.mmTimer);ONLINE.mmTimer=null;}
+    ONLINE.isHost = true;
     wireConn(conn);
     ONLINE.status="connecting";
     onlineUIRefresh();
-    onlineToast("Opponent found!");
-    conn.on("open",()=>{
+    onlineToast(typeof t==="function"?t("matchFound"):"Match found!");
+    conn.on("open", ()=>{
       onlineSend({
         t:"hello",
-        name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color,
+        name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"),
+        elo:RANK.elo, color:CFG.color,
         size:CFG.size, theme:CFG.theme, speed:CFG.speed,
         seed:ONLINE.seed
       });
+      mmCleanupDoc(ONLINE.mmUid);
     });
-  });
-
-  peer.on("error",err=>{
-    const t=String(err.type||err.message||err);
-    if(t==="unavailable-id"||t.includes("taken")||t.includes("unavailable")){
-      // Slot claimed — join them as guest instead
-      joinHostAsGuest(hostId);
-    }else if(ONLINE.status==="searching"){
-      // try another slot
-      const next=(slot+1)%5;
-      becomeMatchHost(bucket, next);
-    }
   });
 }
 
-function joinHostAsGuest(hostId){
-  try{if(ONLINE.peer)ONLINE.peer.destroy();}catch(e){}
-  const peer=new Peer({debug:0,config:ICE});
-  ONLINE.peer=peer;
-  ONLINE.isHost=false;
-  ONLINE.room=hostId;
-  peer.on("open",()=>{
-    const conn=peer.connect(hostId,{reliable:true});
-    wireConn(conn);
-    ONLINE.status="connecting";
-    onlineUIRefresh();
+async function mmEnterQueue(peerId){
+  const uid = mmMyUid();
+  ONLINE.mmUid = uid;
+  const ref = FB.db.collection("matchmaking").doc(uid);
+
+  await ref.set({
+    uid,
+    peerId,
+    name: (RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"),
+    elo: RANK.elo|0,
+    color: CFG.color,
+    status: "waiting",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ts: Date.now()
   });
-  peer.on("error",()=>{
-    if(ONLINE.status==="connecting"||ONLINE.status==="searching"){
-      // fall back to fresh search
-      onlineFindMatch();
+
+  // Poll / listen for a partner
+  ONLINE.mmUnsub = FB.db.collection("matchmaking")
+    .where("status","==","waiting")
+    .orderBy("ts","asc")
+    .limit(10)
+    .onSnapshot(async snap=>{
+      if(ONLINE.mmAbort||ONLINE.status!=="searching")return;
+      await mmTryPair(snap);
+    }, err=>{
+      console.warn("[HexPush] queue listen", err);
+      // Fallback: poll without composite index
+      mmPollFallback();
+    });
+
+  // Also try immediately once
+  try{
+    const q = await FB.db.collection("matchmaking")
+      .where("status","==","waiting")
+      .limit(10)
+      .get();
+    await mmTryPair(q);
+  }catch(e){
+    console.warn("[HexPush] queue query", e);
+    mmPollFallback();
+  }
+
+  // Timeout after 60s
+  ONLINE.mmTimer = setTimeout(()=>{
+    if(ONLINE.status==="searching"){
+      ONLINE.lastError="No opponent found — try again";
+      ONLINE.status="error";
+      mmCleanupDoc(ONLINE.mmUid);
+      onlineUIRefresh();
+      onlineToast(ONLINE.lastError);
     }
+  }, 60000);
+}
+
+function mmPollFallback(){
+  if(ONLINE.mmPoll) return;
+  ONLINE.mmPoll = setInterval(async ()=>{
+    if(ONLINE.mmAbort||ONLINE.status!=="searching"){
+      clearInterval(ONLINE.mmPoll); ONLINE.mmPoll=null; return;
+    }
+    try{
+      const q = await FB.db.collection("matchmaking").where("status","==","waiting").limit(15).get();
+      await mmTryPair(q);
+    }catch(e){ console.warn(e); }
+  }, 1500);
+}
+
+async function mmTryPair(snap){
+  if(ONLINE.mmAbort||ONLINE.status!=="searching")return;
+  const me = ONLINE.mmUid;
+  let partner = null;
+  snap.forEach(doc=>{
+    if(partner) return;
+    const d = doc.data();
+    if(d.uid===me) return;
+    if(d.status!=="waiting") return;
+    // ignore stale > 90s
+    if(d.ts && Date.now()-d.ts > 90000) return;
+    partner = { id: doc.id, ...d };
+  });
+  if(!partner) return;
+
+  // Deterministic role: lower uid is host
+  const iAmHost = me < partner.uid;
+
+  // Claim both docs in a transaction so only one pair wins
+  try{
+    await FB.db.runTransaction(async tx=>{
+      const myRef = FB.db.collection("matchmaking").doc(me);
+      const theirRef = FB.db.collection("matchmaking").doc(partner.id);
+      const myDoc = await tx.get(myRef);
+      const theirDoc = await tx.get(theirRef);
+      if(!myDoc.exists || !theirDoc.exists) throw new Error("gone");
+      if(myDoc.data().status!=="waiting" || theirDoc.data().status!=="waiting") throw new Error("taken");
+      tx.update(myRef, {
+        status: "matched",
+        role: iAmHost ? "host" : "guest",
+        partnerUid: partner.uid,
+        partnerPeerId: partner.peerId,
+        partnerName: partner.name,
+        partnerElo: partner.elo,
+        partnerColor: partner.color
+      });
+      tx.update(theirRef, {
+        status: "matched",
+        role: iAmHost ? "guest" : "host",
+        partnerUid: me,
+        partnerPeerId: ONLINE.myId,
+        partnerName: (RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"),
+        partnerElo: RANK.elo|0,
+        partnerColor: CFG.color
+      });
+    });
+  }catch(e){
+    // lost the race — keep waiting
+    return;
+  }
+
+  // Stop listening
+  if(ONLINE.mmUnsub){ try{ONLINE.mmUnsub();}catch(e){} ONLINE.mmUnsub=null; }
+  if(ONLINE.mmPoll){ clearInterval(ONLINE.mmPoll); ONLINE.mmPoll=null; }
+  if(ONLINE.mmTimer){ clearTimeout(ONLINE.mmTimer); ONLINE.mmTimer=null; }
+
+  ONLINE.remoteName = partner.name || "Opponent";
+  ONLINE.remoteElo = partner.elo|0 || 1000;
+  ONLINE.remoteColor = partner.color || null;
+  ONLINE.status = "connecting";
+  onlineUIRefresh();
+  onlineToast(typeof t==="function"?t("matchFound"):"Match found!");
+
+  if(iAmHost){
+    ONLINE.isHost = true;
+    ONLINE.seed = (Math.random()*1e9)|0;
+    // Wait for guest to connect via peer.on("connection")
+    // Safety: if no one connects in 15s, error
+    ONLINE.mmTimer = setTimeout(()=>{
+      if(ONLINE.status==="connecting" && !ONLINE.conn){
+        ONLINE.lastError="Opponent failed to connect";
+        ONLINE.status="error";
+        mmCleanupDoc(ONLINE.mmUid);
+        onlineUIRefresh();
+      }
+    }, 15000);
+  }else{
+    ONLINE.isHost = false;
+    // Connect to host peer
+    mmConnectToHost(partner.peerId);
+  }
+}
+
+function mmConnectToHost(hostPeerId){
+  if(!ONLINE.peer || !hostPeerId){
+    ONLINE.lastError="Missing host peer id";
+    ONLINE.status="error";
+    onlineUIRefresh();
+    return;
+  }
+  const conn = ONLINE.peer.connect(hostPeerId, {reliable:true});
+  wireConn(conn);
+  conn.on("open", ()=>{
+    mmCleanupDoc(ONLINE.mmUid);
+    // hello sent by wireConn open handler for guest
+  });
+  conn.on("error", err=>{
+    console.warn("[HexPush] connect host failed", err);
+    ONLINE.lastError="Could not reach opponent";
+    ONLINE.status="error";
+    onlineUIRefresh();
   });
 }
 
