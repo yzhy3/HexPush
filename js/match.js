@@ -103,7 +103,8 @@ function update(dt){
       onlineSendInput();
       predictLocalPlayer(dt);
       if(typeof interpOpponent==="function") interpOpponent(dt);
-      tilesUpdate(dt);
+      // Tiles: only bob/visual — warn & collapse come from host snapshots
+      G.tiles.forEach(tile=>{ tile.bob+=dt; if(!tile.alive&&tile.col<3)tile.col+=dt; });
     }
   }else{
     if(G.tut)tutBot(dt);

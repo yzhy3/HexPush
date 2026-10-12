@@ -123,7 +123,10 @@ function tryHit(f,o){
   }
   const dx=o.x-f.x,dy=o.y-f.y,d=Math.hypot(dx,dy),a=Math.atan2(dy,dx);
   burst(f.x+Math.cos(f.face)*26,f.y+Math.sin(f.face)*26,5,f.color,110,.22,2.5);
-  if(d>64||Math.abs(angDiff(a,f.face))>1.0){                       // WHIFF — light, obviously "no contact"
+  // Online: slightly more forgiving range/angle (net desync)
+  const maxDist=(G.kind==="online")?78:64;
+  const maxAng=(G.kind==="online")?1.25:1.0;
+  if(d>maxDist||Math.abs(angDiff(a,f.face))>maxAng){
     f.whiff=1; SFX.swing();
     if(G.tut&&f===G.p)G.tut.misses=(G.tut.misses||0)+1;
     return;

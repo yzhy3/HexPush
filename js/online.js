@@ -38,7 +38,8 @@ function onlineReset(){
   try{if(ONLINE.peer)ONLINE.peer.destroy();}catch(e){}
   ONLINE.peer=null; ONLINE.conn=null; ONLINE.isHost=false; ONLINE.room="";
   ONLINE.status="idle"; ONLINE.lastError=""; ONLINE.myId="";
-  ONLINE.remoteInput={mx:0,my:0,atk:false,dash:false,guard:0,seq:0};
+  ONLINE.remoteInput={mx:0,my:0,atk:false,dash:false,guard:0,seq:0,atkHold:0,dashHold:0};
+  ONLINE._atkSticky=0; ONLINE._dashSticky=0;
   ONLINE.snap=null; ONLINE.seq=0; ONLINE.predErr=0; ONLINE.stateEvery=0;
   ONLINE.mmAbort=false;
 }
@@ -103,11 +104,11 @@ function onOnlineMsg(raw){
   }
   else if((m.t==="input"||m.t==="i")&&ONLINE.isHost){
     const ri=ONLINE.remoteInput;
-    // compact: x,y,a,d,g,n  legacy: mx,my,atk,dash,guard,seq
     ri.mx=+(m.x!=null?m.x:m.mx)||0;
     ri.my=+(m.y!=null?m.y:m.my)||0;
-    if(m.a||m.atk) ri.atk=true;
-    if(m.d||m.dash) ri.dash=true;
+    // Sticky one-shots: survive packet loss / frame gaps (unreliable channel)
+    if(m.a||m.atk){ ri.atk=true; ri.atkHold=8; }
+    if(m.d||m.dash){ ri.dash=true; ri.dashHold=6; }
     ri.guard=(m.g!=null?m.g:m.guard)?1:0;
     ri.seq=(m.n!=null?m.n:m.seq)|0;
   }
@@ -639,15 +640,20 @@ function onlineBroadcastState(){
   ONLINE._lastBroadcast=now;
   const fx=FX_QUEUE.splice(0,FX_QUEUE.length);
   const dead=[];
-  G.tiles.forEach((t,k)=>{if(!t.alive)dead.push(k);});
+  const warn=[];
+  G.tiles.forEach((tile,k)=>{
+    if(!tile.alive) dead.push(k);
+    else if(tile.warn>0) warn.push([k, +tile.warn.toFixed(3), +tile.warnMax.toFixed(3)]);
+  });
   onlineSend({
-    t:"s", // short type
+    t:"s",
     ti:+G.time.toFixed(2),
     in:+G.introT.toFixed(2),
     m:mode==="play"?1:(mode==="intro"?0:2),
     h:packFighter(G.p),
     g:packFighter(G.b),
     d:dead,
+    w:warn.length?warn:undefined,
     nc:+G.nextCrumble.toFixed(2),
     sh:+(G.shake||0).toFixed(2),
     fl:+(G.flash||0).toFixed(2),
@@ -681,8 +687,23 @@ function applyOnlineSnap(m){
   if(dead){
     G.tiles.forEach((tile,k)=>{
       const shouldLive=!dead.includes(k);
-      if(tile.alive&&!shouldLive){tile.alive=false;tile.col=.001;}
+      if(tile.alive&&!shouldLive){tile.alive=false;tile.col=.001;tile.warn=0;}
       else if(!tile.alive&&shouldLive){tile.alive=true;tile.col=0;tile.warn=0;}
+    });
+  }
+  // Purple warn flash before tiles fall — host-authored
+  if(m.w && m.w.length){
+    const map={};
+    m.w.forEach(e=>{ map[e[0]]=e; });
+    G.tiles.forEach((tile,k)=>{
+      if(!tile.alive) return;
+      if(map[k]){
+        tile.warn=map[k][1];
+        tile.warnMax=map[k][2]||1.7;
+      }else if(tile.warn>0){
+        // host cleared warn without killing — rare
+        tile.warn=0;
+      }
     });
   }
   if(time!=null) G.time=time;
@@ -728,13 +749,19 @@ function onlineSendInput(){
   if(ONLINE.status!=="playing"&&ONLINE.status!=="ready")return;
   if(mode!=="play"&&mode!=="intro")return;
   const f=G.p;
-  // Compact input packet
+  // Sticky: resend atk/dash a few frames so host does not miss one-shot packets
+  if(f.ai.wantAtk) ONLINE._atkSticky=10;
+  if(f.ai.wantDash) ONLINE._dashSticky=8;
+  const atk = f.ai.wantAtk || (ONLINE._atkSticky>0);
+  const dash = f.ai.wantDash || (ONLINE._dashSticky>0);
+  if(ONLINE._atkSticky>0) ONLINE._atkSticky--;
+  if(ONLINE._dashSticky>0) ONLINE._dashSticky--;
   onlineSend({
     t:"i",
     x:+(f.ai.mx||0).toFixed(2),
     y:+(f.ai.my||0).toFixed(2),
-    a:f.ai.wantAtk?1:0,
-    d:f.ai.wantDash?1:0,
+    a:atk?1:0,
+    d:dash?1:0,
     g:f.ai.wantGuard?1:0,
     n:++ONLINE.seq
   });
@@ -745,9 +772,16 @@ function applyRemoteInputToBot(){
   const ri=ONLINE.remoteInput;
   const b=G.b;
   b.ai.mx=ri.mx; b.ai.my=ri.my;
-  b.ai.wantAtk=ri.atk; ri.atk=false;
-  b.ai.wantDash=ri.dash; ri.dash=false;
+  // Hold attack/dash for several host frames so stepFighter never misses the edge
+  if(ri.atkHold>0){ b.ai.wantAtk=true; ri.atkHold--; }
+  else { b.ai.wantAtk=!!ri.atk; ri.atk=false; }
+  if(ri.dashHold>0){ b.ai.wantDash=true; ri.dashHold--; }
+  else { b.ai.wantDash=!!ri.dash; ri.dash=false; }
   b.ai.wantGuard=ri.guard;
+  // Face local player while attacking so tryHit angle check passes
+  if(b.ai.wantAtk||b.atkPh){
+    b.face=Math.atan2(G.p.y-b.y, G.p.x-b.x);
+  }
 }
 
 /** Online client: full local simulation so movement/attack feel instant. */

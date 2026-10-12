@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>HEX PUSH</title>
+<meta name="description" content="Hex Push — a fast 1v1 arena duel. Push them off the hex platform. Online multiplayer + ranks.">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<!-- HOME -->
+<div class="scr on" id="scrHome">
+  <div class="title" id="ttl"></div>
+  <div class="hook">One Arena. One Opponent. One Wrong Move.</div>
+  <div id="homeRank" class="home-rank"></div>
+  <div class="lang-toggle" id="langToggle">
+    <button type="button" data-lang="en" class="lang-btn">EN</button>
+    <button type="button" data-lang="es" class="lang-btn">ES</button>
+  </div>
+  <div class="col">
+    <button class="btn pri" data-go="online">Online 1v1</button>
+    <button class="btn" data-go="play">Play vs AI</button>
+    <button class="btn" data-go="rank">Ranks / Leaderboard</button>
+    <button class="btn" data-go="settings">Settings</button>
+    <div class="row">
+      <button class="link" data-go="how">How To Play</button>
+      <button class="link" data-go="tutorial">Tutorial</button>
+      <button class="link" data-go="practice">Practice</button>
+    </div>
+  </div>
+</div>
+
+<!-- WELCOME (first launch only) -->
+<div class="scr" id="scrWelcome">
+  <div class="panel" style="width:min(420px,92vw);text-align:center">
+    <h2>Welcome to Hex Push!</h2>
+    <p class="sub">Learn the basics in under 30 seconds.</p>
+    <div class="col" style="width:100%;animation:none">
+      <button class="btn pri" data-go="tutorial">Start Tutorial</button>
+      <button class="btn" data-go="skiptut">Skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- ONLINE LOBBY -->
+<div class="scr" id="scrOnline">
+  <div class="panel" style="width:min(440px,94vw)">
+    <h2>Online 1v1</h2>
+    <p class="sub">Ranked matchmaking. Find an opponent and duel.</p>
+
+    <div class="grp">
+      <label id="labUsername">Username</label>
+      <div class="row" style="gap:8px">
+        <input class="inp" id="onlineName" maxlength="16" placeholder="Choose username" autocomplete="off" style="flex:1">
+        <button class="btn sm" data-go="claimName" type="button">Save</button>
+      </div>
+      <p class="sub" id="nameStatus" style="margin-top:6px;font-size:11px;text-align:left"></p>
+    </div>
+
+    <div class="online-box">
+      <div class="online-row">
+        <span class="online-label">Status</span>
+        <span id="onlineStatus" class="online-status idle">Ready</span>
+      </div>
+      <div class="online-row">
+        <span class="online-label">Opponent</span>
+        <span id="onlineOpp">—</span>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:16px;gap:8px">
+      <button class="btn pri" id="btnFindMatch" data-go="onlineFind" style="flex:1">Find Match</button>
+      <button class="btn sm" data-go="onlineLeave">Cancel</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm" data-go="home" style="flex:1">Home</button>
+    </div>
+    <p class="sub" style="margin-top:14px;font-size:11px">Match starts automatically when both players connect. ELO updates after the duel.</p>
+  </div>
+</div>
+
+<!-- RANKS -->
+<div class="scr" id="scrRank">
+  <div class="panel" style="width:min(480px,94vw)">
+    <h2>Ranks</h2>
+    <p class="sub">Climb the ladder in online matches. AI games don't affect rank.</p>
+    <div id="rankHero" class="rank-hero"></div>
+    <div id="rankBars" class="rank-bars"></div>
+    <div class="grp" style="margin-top:16px"><label>Global Leaderboard</label>
+      <div id="leaderboard" class="leaderboard">Loading…</div>
+    </div>
+    <div id="rankTiers" class="rank-tiers"></div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn pri" data-go="online">Play Online</button>
+      <button class="btn sm" data-go="home">Home</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SETTINGS -->
+<div class="scr" id="scrSet">
+  <div class="panel">
+    <h2>Match Setup</h2>
+    <p class="sub">Every match is a fresh duel. Tune it how you like.</p>
+    <div class="grp"><label>Difficulty</label><div class="opts" data-k="diff"></div></div>
+    <div class="grp"><label>Arena Size</label><div class="opts" data-k="size"></div></div>
+    <div class="grp"><label>Arena Theme</label><div class="opts" data-k="theme"></div></div>
+    <div class="grp"><label>Match Speed</label><div class="opts" data-k="speed"></div></div>
+    <div class="grp"><label>Player Color</label><div class="opts" data-k="color"></div></div>
+    <div class="grp" id="grpJoy"><label>Show Movement Joystick</label><div class="opts" data-k="joy"></div></div>
+    <div class="row" style="margin-top:20px">
+      <button class="btn pri" data-go="start" style="flex:1;min-width:180px">Start Match</button>
+      <button class="btn sm" data-go="home">Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- HOW TO PLAY -->
+<div class="scr" id="scrHow">
+  <div class="panel">
+    <h2>How To Play</h2>
+    <p class="sub">Push them off. Don't get pushed off. That's it.</p>
+    <div class="how">
+      <b>Desktop</b><br>
+      <span class="k">WASD</span>Move &nbsp; <span class="k">␣</span>Dash<br>
+      <span class="k">LMB</span>Push Attack &nbsp; <span class="k">RMB</span>Guard (hold)<br><br>
+      <b>Mobile</b><br>Left thumb = joystick. Right thumb = Push / Dash / Guard.<br><br>
+      <b>Rules</b><br>
+      • No health. Every clean hit knocks the enemy back exactly one hex tile.<br>
+      • <b>Guard</b> blocks a push and staggers the attacker — but the meter runs dry.<br>
+      • Get hit mid-swing and you <b>stagger</b>: free combo for them.<br>
+      • Glowing tiles are about to <b>collapse</b>. The arena never stops shrinking.<br>
+      • Fall off and you lose. Simple.<br><br>
+      <b>Online</b><br>
+      Tap Find Match to get paired with another player. Wins and losses update your ELO rank.
+    </div>
+    <div class="row" style="margin-top:20px"><button class="btn sm" data-go="home">Back</button></div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="tag" id="tagP"><span class="dot" id="dotP"></span>You</div>
+  <div class="tag" id="tagB"><span class="dot" id="dotB"></span><span id="botName">Bot</span></div>
+  <div id="cds">
+    <div class="cd"><b>Dash</b><i id="cdDash"></i></div>
+    <div class="cd"><b>Guard</b><i id="cdGrd"></i></div>
+  </div>
+  <button id="pause">❚❚</button>
+</div>
+
+<!-- MOBILE PAD -->
+<div id="pad">
+  <div id="stick"><div id="jbase"></div><div id="jknob"></div></div>
+  <div class="tbtn" id="bAtk">PUSH</div>
+  <div class="tbtn" id="bDash">DASH</div>
+  <div class="tbtn" id="bGrd">GUARD</div>
+</div>
+
+<div id="center"></div>
+<div id="tut"></div>
+
+<!-- PAUSE -->
+<div class="scr" id="scrPause">
+  <div class="panel" style="width:min(360px,90vw)">
+    <h2>Paused</h2><p class="sub">Take a breath.</p>
+    <div class="col" style="width:100%">
+      <button class="btn pri" data-go="resume">Resume</button>
+      <button class="btn" data-go="restart">Restart</button>
+      <button class="btn" data-go="home">Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div class="scr" id="scrEnd">
+  <div class="big" id="endTitle">YOU WIN</div>
+  <div class="msg" id="endMsg"></div>
+  <div class="stats">
+    <div class="st"><b>Time</b><i id="sTime">0.0s</i></div>
+    <div class="st"><b>Difficulty</b><i id="sDiff">Normal</i></div>
+    <div class="st"><b>Arena</b><i id="sTheme">Neon Grid</i></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button class="btn pri" data-go="replay">Replay</button>
+    <button class="btn sm" data-go="settings">Change Settings</button>
+    <button class="btn sm" data-go="home">Home</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/config.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/rank.js"></script>
+<script src="js/firebase-app.js"></script>
+<script src="js/hex.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/state.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/arena.js"></script>
+<script src="js/fighter.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/tutorial.js"></script>
+<script src="js/render.js"></script>
+<script src="js/match.js"></script>
+<script src="js/online.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
