@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -17,9 +17,12 @@
   <div class="title" id="ttl"></div>
   <div class="hook">One Arena. One Opponent. One Wrong Move.</div>
   <div id="homeRank" class="home-rank"></div>
+  <div class="lang-toggle" id="langToggle">
+    <button type="button" data-lang="en" class="lang-btn">EN</button>
+    <button type="button" data-lang="es" class="lang-btn">ES</button>
+  </div>
   <div class="col">
     <button class="btn pri" data-go="online">Online 1v1</button>
-    <button class="btn" data-go="br">Battle Royale</button>
     <button class="btn" data-go="play">Play vs AI</button>
     <button class="btn" data-go="rank">Ranks / Leaderboard</button>
     <button class="btn" data-go="settings">Settings</button>
@@ -47,10 +50,10 @@
 <div class="scr" id="scrOnline">
   <div class="panel" style="width:min(440px,94vw)">
     <h2>Online 1v1</h2>
-    <p class="sub">Ranked duel. Find a match or play a friend with a code.</p>
+    <p class="sub">Ranked matchmaking. Find an opponent and duel.</p>
 
     <div class="grp">
-      <label>Username</label>
+      <label id="labUsername">Username</label>
       <div class="row" style="gap:8px">
         <input class="inp" id="onlineName" maxlength="16" placeholder="Choose username" autocomplete="off" style="flex:1">
         <button class="btn sm" data-go="claimName" type="button">Save</button>
@@ -64,35 +67,19 @@
         <span id="onlineStatus" class="online-status idle">Ready</span>
       </div>
       <div class="online-row">
-        <span class="online-label">Room</span>
-        <span id="onlineCode" class="online-code">—</span>
-      </div>
-      <div class="online-row">
         <span class="online-label">Opponent</span>
         <span id="onlineOpp">—</span>
       </div>
     </div>
 
-    <div class="row" style="margin-top:14px">
+    <div class="row" style="margin-top:16px;gap:8px">
       <button class="btn pri" id="btnFindMatch" data-go="onlineFind" style="flex:1">Find Match</button>
-    </div>
-
-    <div class="online-divider"><span>or private room</span></div>
-
-    <div class="row" style="gap:8px;flex-wrap:wrap">
-      <button class="btn" data-go="onlineCreate" style="flex:1;min-width:120px">Create Room</button>
-      <button class="btn" data-go="onlineJoin" style="flex:1;min-width:120px">Join Room</button>
-    </div>
-    <div class="grp" style="margin-top:12px">
-      <label>Join code</label>
-      <input class="inp" id="joinCode" maxlength="8" placeholder="ABC123" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em;text-align:center;font-weight:700">
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn sm" id="btnOnlineStart" data-go="onlineStart" disabled style="opacity:.45">Start</button>
       <button class="btn sm" data-go="onlineLeave">Cancel</button>
-      <button class="btn sm" data-go="home">Home</button>
     </div>
-    <p class="sub" style="margin-top:14px;font-size:11px">Matches start automatically when both players connect. Ranked ELO updates after the duel.</p>
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm" data-go="home" style="flex:1">Home</button>
+    </div>
+    <p class="sub" style="margin-top:14px;font-size:11px">Match starts automatically when both players connect. ELO updates after the duel.</p>
   </div>
 </div>
 
@@ -114,26 +101,6 @@
   </div>
 </div>
 
-
-<!-- BATTLE ROYALE -->
-<div class="scr" id="scrBr">
-  <div class="panel" style="width:min(440px,94vw)">
-    <h2>Battle Royale</h2>
-    <p class="sub">Last fighter standing. Bigger arena. Everyone is a target.</p>
-    <div class="grp"><label>Players (you + bots)</label>
-      <div class="opts" id="brCountOpts">
-        <div class="opt sel" data-brc="4">4</div>
-        <div class="opt" data-brc="5">5</div>
-        <div class="opt" data-brc="6">6</div>
-      </div>
-    </div>
-    <div class="row" style="margin-top:16px">
-      <button class="btn pri" data-go="brStart" style="flex:1">Drop In</button>
-      <button class="btn sm" data-go="home">Home</button>
-    </div>
-    <p class="sub" style="margin-top:12px;font-size:11px">Online BR rooms coming via private codes in Online. Effects are synced for both players in 1v1.</p>
-  </div>
-</div>
 
 <!-- SETTINGS -->
 <div class="scr" id="scrSet">
@@ -170,7 +137,7 @@
       • Glowing tiles are about to <b>collapse</b>. The arena never stops shrinking.<br>
       • Fall off and you lose. Simple.<br><br>
       <b>Online</b><br>
-      Create a room, share the 6-character code, duel a friend. Wins and losses update your ELO rank.
+      Tap Find Match to get paired with another player. Wins and losses update your ELO rank.
     </div>
     <div class="row" style="margin-top:20px"><button class="btn sm" data-go="home">Back</button></div>
   </div>
@@ -231,6 +198,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/config.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/rank.js"></script>
 <script src="js/firebase-app.js"></script>
@@ -245,7 +213,6 @@
 <script src="js/render.js"></script>
 <script src="js/match.js"></script>
 <script src="js/online.js"></script>
-<script src="js/br.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
