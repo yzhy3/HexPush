@@ -38,7 +38,9 @@ function startMatch(kind){
   el("dotP").style.color=pc;
   el("dotB").style.color=botCol;
   el("botName").textContent=
-    G.kind==="practice"?"Dummy":G.kind==="tutorial"?"Trainer":PERSONAS[G.persona].name;
+    G.kind==="practice"?"Dummy":G.kind==="tutorial"?"Trainer":(PERSONAS[G.persona]?PERSONAS[G.persona].name:"Bot");
+  const tp=el("tagP");
+  if(tp) tp.innerHTML='<span class="dot" id="dotP" style="color:'+pc+'"></span>'+(RANK.name||(typeof t==="function"?t("you"):"You"));
   show(); show("hud",true); lastCenter="";
   if(teach)flag("seen",1);                          // welcome modal is a one-time thing
   G.tut = G.kind==="tutorial" ? {step:0,t:0,n:0,last:"",hits:0,blocked:false,dashed:false,pushT:0} : null;
@@ -59,14 +61,18 @@ function update(dt){
   if(mode==="intro"){
     // host (or offline) advances the clock; online client follows host snapshots
     if(!(G.kind==="online"&&!ONLINE.isHost)) G.introT+=dt;
-    const vsName=G.kind==="br"?"BATTLE ROYALE"
-      :G.kind==="online"
-      ?(ONLINE.remoteName||"OPPONENT").toUpperCase()
-      :(PERSONAS[G.persona]?PERSONAS[G.persona].name:"OPPONENT").toUpperCase();
-    const st=[[0,"PLAYER VS "+vsName],[1.1,"3"],[1.8,"2"],[2.5,"1"],[3.2,"PUSH!"]];
+    const myName=(typeof displayName==="function"?displayName(RANK.name, typeof t==="function"?t("you"):"You"):(RANK.name||"You")).toUpperCase();
+    let vsName;
+    if(G.kind==="online"){
+      vsName=(typeof displayName==="function"?displayName(ONLINE.remoteName,"Opponent"):(ONLINE.remoteName||"Opponent")).toUpperCase();
+    }else{
+      vsName=(PERSONAS[G.persona]?PERSONAS[G.persona].name:"BOT").toUpperCase();
+    }
+    const st=[[0, myName+" VS "+vsName],[1.1,"3"],[1.8,"2"],[2.5,"1"],[3.2,"PUSH!"]];
     let cur=""; for(const s of st)if(G.introT>=s[0])cur=s[1];
     if(cur!==lastCenter){
-      setCenter(cur,G.kind==="online"?"Push them off the arena":"Push the bot off the arena");
+      const tip=G.kind==="online"?(typeof t==="function"?t("pushThem"):"Push them off the arena"):(typeof t==="function"?t("pushBot"):"Push the bot off the arena");
+      setCenter(cur, tip);
       if(cur==="PUSH!"){SFX.go();
         setTimeout(()=>{if(lastCenter==="PUSH!")setCenter("")},1000);
       }else if(G.introT>1)SFX.count();
@@ -79,13 +85,6 @@ function update(dt){
   if(mode!=="play")   {if(mode==="over"){G.endT+=dt;camUpdate(dt,2.2);tilesUpdate(dt);}return;}
 
   G.time+=dt;
-
-  if(G.kind==="br"){
-    brUpdate(dt);
-    camUpdate(dt,2.6);
-    hudUpdate();
-    return;
-  }
 
   playerInput(G.p);
 
@@ -153,7 +152,7 @@ function endMatch(win){
   flag("played",1); flag("seen",1);
   show("end",true); show("hud",false); padVisible(false); tutSay(""); tutHi(null);
   const title=el("endTitle");
-  title.textContent=win?"YOU WIN":"YOU LOST";
+  title.textContent=win?(typeof t==="function"?t("youWin"):"YOU WIN"):(typeof t==="function"?t("youLost"):"YOU LOST");
   title.className="big "+(win?"win":"lose");
   const close=G.time<26||aliveTiles().length<=6;
   el("endMsg").textContent=win

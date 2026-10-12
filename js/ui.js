@@ -3,7 +3,7 @@
 
 const SCR={
   home:"scrHome",settings:"scrSet",how:"scrHow",pause:"scrPause",end:"scrEnd",
-  welcome:"scrWelcome",online:"scrOnline",rank:"scrRank",br:"scrBr"
+  welcome:"scrWelcome",online:"scrOnline",rank:"scrRank"
 };
 const hudEl=el("hud"), centerEl=el("center");
 const cdDash=el("cdDash"), cdGrd=el("cdGrd"), bDashEl=el("bDash");
@@ -18,7 +18,7 @@ function show(name,on){
 }
 function goHome(){
   if(ONLINE&&ONLINE.status!=="idle")onlineLeave();
-  if(typeof brReset==="function")brReset(); FX_NET=false;
+  FX_NET=false;
   mode="menu"; show(); show("home",true); padVisible(false); setCenter(""); resetInput();
   G.conf.length=0; G.tut=null; G.slow=1; G.hitstop=0; G.focus=null;
   tutSay(""); tutHi(null); jbase.classList.remove("pulse");
@@ -150,9 +150,9 @@ document.addEventListener("click",e=>{
         : {ok:true, local:true};
       if(res.ok){
         setPlayerName(ni.value);
-        if(st) st.textContent = res.local ? "Saved locally (configure Firebase for global usernames)" : "Username saved ✓";
+        if(st) st.textContent = res.local ? t("nameLocal") : t("nameSaved");
         refreshHomeRank();
-      }else if(st) st.textContent = res.error||"Failed";
+      }else if(st) st.textContent = res.error||"Error";
     })();
   }
   else if(g==="br"){mode="menu";show();show("br",true);}
@@ -165,16 +165,7 @@ document.addEventListener("click",e=>{
     const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
     onlineFindMatch();
   }
-  else if(g==="onlineCreate"){
-    const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
-    onlineCreate();
-  }
-  else if(g==="onlineJoin"){
-    const ni=el("onlineName"); if(ni)setPlayerName(ni.value);
-    onlineJoin(el("joinCode").value);
-  }
   else if(g==="onlineLeave"){onlineLeave(); onlineUIRefresh();}
-  else if(g==="onlineStart"){onlineHostStart();}
 });
 document.addEventListener("mouseenter",e=>{
   if(e.target.classList&&e.target.classList.contains("btn"))SFX.hover();
@@ -211,13 +202,6 @@ async function refreshLeaderboard(){
   ).join("");
 }
 
-// BR count opts
-document.querySelectorAll("#brCountOpts .opt").forEach(o=>{
-  o.onclick=()=>{
-    document.querySelectorAll("#brCountOpts .opt").forEach(x=>x.classList.remove("sel"));
-    o.classList.add("sel"); SFX.click();
-  };
-});
 
 // Boot Firebase
 (async function(){
@@ -225,6 +209,18 @@ document.querySelectorAll("#brCountOpts .opt").forEach(o=>{
     const ok=await fbInit();
     refreshHomeRank();
     const st=el("nameStatus");
-    if(st&&FB_ENABLED) st.textContent = ok ? "Cloud sync on" : ("Firebase: "+(FB.error||"offline"));
+    if(st&&FB_ENABLED) st.textContent = ok ? t("cloudOn") : ("Firebase: "+(FB.error||"offline"));
   }
 })();
+
+
+// Language toggle
+document.querySelectorAll("[data-lang]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    audioInit(); SFX.click();
+    setLang(b.dataset.lang);
+  });
+});
+
+// Apply translations once DOM + modules ready
+if(typeof applyI18n==="function") applyI18n();

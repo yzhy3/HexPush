@@ -212,3 +212,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .lb-row span:last-child{text-align:right;font-weight:800;color:#8ee6ff}
 .lb-row.me{background:rgba(45,125,255,.15);color:#fff}
 .lb-row:last-child{border-bottom:none}
+
+.lang-toggle{display:flex;gap:6px;justify-content:center;margin:0 0 12px}
+.lang-btn{padding:6px 14px;border-radius:999px;border:1px solid rgba(130,180,255,.25);
+  background:rgba(255,255,255,.04);color:#8ea4c9;font-size:11px;font-weight:800;
+  letter-spacing:.14em;cursor:pointer;transition:all .18s}
+.lang-btn:hover{color:#fff;border-color:rgba(150,210,255,.5)}
+.lang-btn.sel{background:linear-gradient(180deg,#2f7dff,#1a47b5);border-color:#8ecdff;color:#fff}

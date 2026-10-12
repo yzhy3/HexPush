@@ -67,14 +67,16 @@ function onOnlineMsg(raw){
   if(!m||!m.t)return;
 
   if(m.t==="hello"){
-    ONLINE.remoteName=m.name||"Opponent";
+    let rn=(m.name||"").trim();
+    if(!rn||rn==="Challenger"||rn==="Player"||rn==="Opponent") rn="Opponent";
+    ONLINE.remoteName=rn.slice(0,16);
     ONLINE.remoteElo=m.elo|0||1000;
     ONLINE.remoteColor=m.color||null;
     if(ONLINE.isHost){
       if(m.size){/* guest may not send settings */}
       onlineSend({
         t:"hello",
-        name:RANK.name, elo:RANK.elo, color:CFG.color,
+        name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color,
         size:CFG.size, theme:CFG.theme, speed:CFG.speed,
         seed:ONLINE.seed
       });
@@ -151,7 +153,7 @@ function wireConn(conn){
   });
   conn.on("open",()=>{
     if(!ONLINE.isHost){
-      onlineSend({t:"hello", name:RANK.name, elo:RANK.elo, color:CFG.color});
+      onlineSend({t:"hello", name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color});
     }
   });
 }
@@ -267,7 +269,7 @@ function becomeMatchHost(bucket,slot){
     conn.on("open",()=>{
       onlineSend({
         t:"hello",
-        name:RANK.name, elo:RANK.elo, color:CFG.color,
+        name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color,
         size:CFG.size, theme:CFG.theme, speed:CFG.speed,
         seed:ONLINE.seed
       });
@@ -331,7 +333,7 @@ function onlineCreate(){
     conn.on("open",()=>{
       onlineSend({
         t:"hello",
-        name:RANK.name, elo:RANK.elo, color:CFG.color,
+        name:(RANK.name&&RANK.name!=="Challenger"?RANK.name:"Player"), elo:RANK.elo, color:CFG.color,
         size:CFG.size, theme:CFG.theme, speed:CFG.speed,
         seed:ONLINE.seed
       });
@@ -420,8 +422,10 @@ function startOnlineMatch(asHost){
   G.tut=null;
   el("dotP").style.color=G.p.color;
   el("dotB").style.color=G.b.color;
-  el("botName").textContent=ONLINE.remoteName;
-  el("tagP").innerHTML='<span class="dot" id="dotP" style="color:'+G.p.color+'"></span>You';
+  const myLabel = (typeof displayName==="function"?displayName(RANK.name, typeof t==="function"?t("you"):"You"):(RANK.name||"You"));
+  const oppLabel = (typeof displayName==="function"?displayName(ONLINE.remoteName,"Opponent"):(ONLINE.remoteName||"Opponent"));
+  el("botName").textContent=oppLabel;
+  el("tagP").innerHTML='<span class="dot" id="dotP" style="color:'+G.p.color+'"></span>'+myLabel;
   show(); show("hud",true); lastCenter="";
   mode="intro";
   ONLINE.status="playing";
@@ -552,7 +556,7 @@ function endMatchOnline(win, fromRemote){
 
   const result=applyMatchResult(win, ONLINE.remoteElo);
   const title=el("endTitle");
-  title.textContent=win?"YOU WIN":"YOU LOST";
+  title.textContent=win?(typeof t==="function"?t("youWin"):"YOU WIN"):(typeof t==="function"?t("youLost"):"YOU LOST");
   title.className="big "+(win?"win":"lose");
   const sign=result.delta>=0?"+":"";
   el("endMsg").textContent=(win?"Victory! ":"Defeat. ")+sign+result.delta+" ELO → "+result.elo+" ("+result.tier.name+")";
@@ -589,38 +593,31 @@ function onlineToast(msg){
 
 function onlineUIRefresh(){
   const st=el("onlineStatus");
-  const code=el("onlineCode");
   const opp=el("onlineOpp");
-  const startBtn=el("btnOnlineStart");
   const findBtn=el("btnFindMatch");
   if(!st)return;
   const map={
-    idle:"Ready",
-    searching:"Searching for opponent…",
-    connecting:"Connecting…",
-    ready:"Match found!",
-    playing:"In match",
+    idle: typeof t==="function"?t("ready"):"Ready",
+    searching: typeof t==="function"?t("searchingOpp"):"Searching…",
+    connecting: typeof t==="function"?t("connecting"):"Connecting…",
+    ready: typeof t==="function"?t("matchFound"):"Match found!",
+    playing: typeof t==="function"?t("inMatch"):"In match",
     error:"Error: "+(ONLINE.lastError||"unknown")
   };
   st.textContent=map[ONLINE.status]||ONLINE.status;
   st.className="online-status "+ONLINE.status;
-  if(code){
-    // only show code for private rooms (short alphanumeric, not mm ids)
-    const privateRoom=ONLINE.room&&ONLINE.room.length<=8&&!ONLINE.room.startsWith("hph");
-    code.textContent=privateRoom?ONLINE.room:(ONLINE.status==="searching"?"…":"—");
-  }
   if(opp){
     if(ONLINE.status==="ready"||ONLINE.status==="playing"||ONLINE.status==="connecting")
       opp.innerHTML=ONLINE.remoteName+" "+rankBadgeHTML({elo:ONLINE.remoteElo,name:ONLINE.remoteName});
     else opp.textContent="—";
   }
-  if(startBtn){
-    startBtn.disabled=!(ONLINE.isHost&&ONLINE.status==="ready");
-    startBtn.style.opacity=startBtn.disabled?.45:1;
-  }
   if(findBtn){
-    findBtn.disabled=ONLINE.status==="searching"||ONLINE.status==="connecting"||ONLINE.status==="playing";
-    findBtn.textContent=ONLINE.status==="searching"?"Searching…":"Find Match";
+    const busy=ONLINE.status==="searching"||ONLINE.status==="connecting"||ONLINE.status==="playing"||ONLINE.status==="ready";
+    findBtn.disabled=busy;
+    findBtn.style.opacity=busy?.5:1;
+    findBtn.textContent=ONLINE.status==="searching"
+      ?(typeof t==="function"?t("searching"):"Searching…")
+      :(typeof t==="function"?t("findMatch"):"Find Match");
   }
 }
 

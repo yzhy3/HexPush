@@ -25,9 +25,16 @@ async function fbInit(){
     await fbLoadProfile();
     return true;
   }catch(e){
-    FB.error = String(e.message||e);
+    const code = (e && e.code) || "";
+    let msg = String(e.message||e);
+    if(code==="auth/admin-restricted-operation" || /admin-restricted/i.test(msg)){
+      msg = "Enable Anonymous sign-in: Firebase Console → Authentication → Sign-in method → Anonymous → Enable";
+    }else if(code==="auth/operation-not-allowed"){
+      msg = "Anonymous auth is disabled in Firebase Console";
+    }
+    FB.error = msg;
     FB.ready = false;
-    console.warn("[HexPush] Firebase init failed:", e);
+    console.warn("[HexPush] Firebase init failed:", code, e);
     return false;
   }
 }
